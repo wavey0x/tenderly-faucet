@@ -205,9 +205,9 @@ export default function Home() {
 
       {/* RPC Modal */}
       {showRpcInput && (
-        <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
-          <div className="w-full max-w-md mx-4">
-            <h2 className="text-xl mb-4 font-mono text-black">
+        <div className="fixed inset-0 bg-white flex items-start sm:items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md">
+            <h2 className="text-lg sm:text-xl mb-3 font-mono text-black">
               Set Tenderly RPC URL
             </h2>
             <div className="relative">
@@ -220,7 +220,7 @@ export default function Home() {
                   validateAndSetUrl(url);
                 }}
                 placeholder="https://rpc.tenderly.co/fork/..."
-                className={`w-full p-2 pr-8 border bg-white text-black ${
+                className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
                   tenderlyUrl && !isValidUrl ? "border-red-500" : "border-black"
                 }`}
                 required
@@ -245,7 +245,7 @@ export default function Home() {
             {isValidUrl && (
               <button
                 onClick={() => setShowRpcInput(false)}
-                className="mt-4 w-full p-2 border border-black text-black bg-white hover:bg-gray-50"
+                className="mt-3 w-full p-2 border border-black text-black bg-white hover:bg-gray-50 text-sm sm:text-base"
               >
                 Continue
               </button>
@@ -254,13 +254,13 @@ export default function Home() {
         </div>
       )}
 
-      <main className="p-4 max-w-md mx-auto font-mono text-black">
+      <main className="p-3 sm:p-4 max-w-md mx-auto font-mono text-black">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-xl">Token Faucet</h1>
+          <h1 className="text-lg sm:text-xl">Token Faucet</h1>
           {!showRpcInput && isValidUrl && (
             <button
               onClick={() => setShowRpcInput(true)}
-              className="text-sm px-2 py-1 border border-black hover:bg-gray-50"
+              className="text-xs sm:text-sm px-2 py-1 border border-black hover:bg-gray-50"
             >
               Change RPC
             </button>
@@ -268,17 +268,17 @@ export default function Home() {
         </div>
 
         {isValidUrl && !showRpcInput && (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Token</label>
-              <label className="block text-sm mb-1">
+              <label className="block text-xs sm:text-sm mb-1">
                 <input
                   type="checkbox"
                   checked={useCustomToken}
                   onChange={(e) => setUseCustomToken(e.target.checked)}
                   className="mr-1"
                 />
-                Custom token
+                Custom
               </label>
 
               {useCustomToken ? (
@@ -288,7 +288,7 @@ export default function Home() {
                     value={customToken}
                     onChange={(e) => setCustomToken(e.target.value)}
                     placeholder="Token Address (0x...)"
-                    className={`w-full p-1 border bg-white text-black ${
+                    className={`w-full p-2 text-sm sm:text-base border bg-white text-black ${
                       customToken && !isValidToken
                         ? "border-red-500"
                         : "border-black"
@@ -305,7 +305,7 @@ export default function Home() {
                 <select
                   value={selectedToken}
                   onChange={(e) => setSelectedToken(e.target.value)}
-                  className="w-full p-1 border border-black bg-white text-black"
+                  className="w-full p-2 text-sm sm:text-base border border-black bg-white text-black"
                 >
                   {PRESET_TOKENS.map((token) => (
                     <option key={token.address} value={token.address}>
@@ -324,7 +324,7 @@ export default function Home() {
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                   placeholder="Address (0x...)"
-                  className={`w-full p-1 border bg-white text-black ${
+                  className={`w-full p-2 text-sm sm:text-base border bg-white text-black ${
                     recipient && !isValidAddress
                       ? "border-red-500"
                       : "border-black"
@@ -350,7 +350,7 @@ export default function Home() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="Enter amount"
-                className="w-full p-1 border border-black bg-white text-black"
+                className="w-full p-2 text-sm sm:text-base border border-black bg-white text-black"
                 required
               />
             </div>
@@ -360,7 +360,7 @@ export default function Home() {
               disabled={
                 loading || !isValidAddress || (useCustomToken && !isValidToken)
               }
-              className={`w-full p-1 border border-black text-black
+              className={`w-full p-2 text-sm sm:text-base border border-black text-black
                 ${
                   loading ||
                   !isValidAddress ||
@@ -372,14 +372,18 @@ export default function Home() {
               {loading ? "..." : "Fund"}
             </button>
 
-            {error && <div className="text-red-500 text-sm">{error}</div>}
-            {success && <div className="text-green-500 text-sm">{success}</div>}
+            {error && (
+              <div className="text-red-500 text-xs sm:text-sm">{error}</div>
+            )}
+            {success && (
+              <div className="text-green-500 text-xs sm:text-sm">{success}</div>
+            )}
           </form>
         )}
 
         {balances && isValidAddress && !showRpcInput && (
-          <div className="border border-gray-200 p-2 mt-6 text-sm font-mono bg-gray-50 text-black shadow-sm">
-            <div className="text-sm mb-2 font-bold border-b border-gray-100 pb-2">
+          <div className="border border-gray-200 p-2 mt-4 sm:mt-6 text-xs sm:text-sm font-mono bg-gray-50 text-black shadow-sm">
+            <div className="text-xs sm:text-sm mb-2 font-bold border-b border-gray-100 pb-2">
               Wallet Info
             </div>
             <div className="space-y-1">
