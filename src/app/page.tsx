@@ -41,12 +41,19 @@ export default function Home() {
 
   useEffect(() => {
     // Check for RPC URL in cookies
-    const storedUrl = Cookies.get(STORAGE_KEYS.TENDERLY_URL);
+    const storedData = Cookies.get(STORAGE_KEYS.TENDERLY_URL);
     const storedError = Cookies.get(STORAGE_KEYS.ERROR);
 
-    if (storedUrl) {
-      setRpcUrl(storedUrl);
-      setShowRpcInput(false);
+    if (storedData) {
+      try {
+        const data = JSON.parse(storedData);
+        if (data.url) {
+          setRpcUrl(data.url);
+          setShowRpcInput(false);
+        }
+      } catch (error) {
+        console.error("Error parsing stored RPC data:", error);
+      }
     }
 
     if (storedError) {
