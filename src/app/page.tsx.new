@@ -1,0 +1,19 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { PRESET_TOKENS } from "@/config/tokens";
+import {
+  setTokenBalance,
+  setEthBalance,
+  isValidEthereumAddress,
+  isValidERC20,
+  getAllBalances,
+  validateProvider,
+} from "@/utils/faucet";
+import Cookies from "js-cookie";
+
+const STORAGE_KEYS = {
+  TENDERLY_URL: "tenderly-faucet-url",
+  SAVED_ADDRESSES: "tenderly-faucet-addresses",
+  ERROR: "tenderly-faucet-error",
+}; 
