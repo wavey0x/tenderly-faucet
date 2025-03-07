@@ -48,6 +48,7 @@ export default function Home() {
         const rpcUrl = RPC_CONFIG.buildUrl(guid);
         setRpcUrl(rpcUrl);
         setShowRpcInput(false);
+        setValidRpc(true);
         // Clear the URL params
         window.history.replaceState({}, "", "/");
       } catch {
@@ -93,13 +94,28 @@ export default function Home() {
     setError(null);
 
     try {
-      const isValid = await validateProvider(rpcUrl);
-      if (isValid) {
-        setValidRpc(true);
-        setShowRpcInput(false);
-        localStorage.setItem("tenderly-faucet-url", rpcUrl);
+      // Check if input is a GUID
+      if (rpcUrl.includes("4249ff26-95dc-488b-8f35-a6ca53ecebb3")) {
+        const fullUrl = RPC_CONFIG.buildUrl(rpcUrl);
+        const isValid = await validateProvider(fullUrl);
+        if (isValid) {
+          setRpcUrl(fullUrl);
+          setValidRpc(true);
+          setShowRpcInput(false);
+          localStorage.setItem("tenderly-faucet-url", fullUrl);
+        } else {
+          setError("Invalid or unreachable RPC URL");
+        }
       } else {
-        setError("Invalid or unreachable RPC URL");
+        // Handle full URL
+        const isValid = await validateProvider(rpcUrl);
+        if (isValid) {
+          setValidRpc(true);
+          setShowRpcInput(false);
+          localStorage.setItem("tenderly-faucet-url", rpcUrl);
+        } else {
+          setError("Invalid or unreachable RPC URL");
+        }
       }
     } catch (error) {
       console.error("Error validating RPC:", error);
@@ -247,7 +263,7 @@ export default function Home() {
         <div className="fixed inset-0 bg-white flex items-start sm:items-center justify-center z-50 p-4">
           <div className="w-full max-w-md">
             <h2 className="text-lg sm:text-xl mb-3 font-mono text-black">
-              Input Tenderly Admin RPC URL
+              Input Tenderly Admin RPC URL or GUID
             </h2>
             {error && <div className="text-red-500 text-sm mb-3">{error}</div>}
             <div className="relative">
@@ -259,7 +275,7 @@ export default function Home() {
                   setRpcUrl(url);
                   handleRpcSubmit();
                 }}
-                placeholder="https://rpc.tenderly.co/fork/..."
+                placeholder="Enter full RPC URL or just the GUID (e.g. 4249ff26-95dc-488b-8f35-a6ca53ecebb3)"
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
                   rpcUrl && !isValidating ? "border-black" : "border-red-500"
                 }`}
