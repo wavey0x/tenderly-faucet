@@ -37,6 +37,7 @@ export default function Home() {
   } | null>(null);
   const [isValidAddress, setIsValidAddress] = useState(false);
   const [isValidToken, setIsValidToken] = useState(true);
+  const [validRpc, setValidRpc] = useState(false);
 
   useEffect(() => {
     // Check for RPC URL in cookies
@@ -55,23 +56,49 @@ export default function Home() {
     }
   }, []);
 
-  const handleRpcSubmit = async (url: string) => {
+  // Add this effect to validate the RPC URL when it's loaded from localStorage
+  useEffect(() => {
+    const validateStoredRpc = async () => {
+      const storedUrl = localStorage.getItem(STORAGE_KEYS.TENDERLY_URL);
+      if (storedUrl) {
+        try {
+          const isValid = await validateProvider(storedUrl);
+          if (isValid) {
+            setRpcUrl(storedUrl);
+            setValidRpc(true);
+            setShowRpcInput(false);
+          } else {
+            // If the stored URL is invalid, clear it
+            localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
+          }
+        } catch (error) {
+          console.error("Error validating stored RPC:", error);
+          localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
+        }
+      }
+    };
+
+    validateStoredRpc();
+  }, []);
+
+  const handleRpcSubmit = async () => {
+    if (!rpcUrl) return;
+
     setIsValidating(true);
     setError(null);
 
     try {
-      const isValid = await validateProvider(url);
+      const isValid = await validateProvider(rpcUrl);
       if (isValid) {
-        setRpcUrl(url);
+        setValidRpc(true);
         setShowRpcInput(false);
-        // Store in cookie
-        Cookies.set(STORAGE_KEYS.TENDERLY_URL, url, { path: "/" });
+        localStorage.setItem(STORAGE_KEYS.TENDERLY_URL, rpcUrl);
       } else {
-        setError("Invalid RPC URL");
+        setError("Invalid or unreachable RPC URL");
       }
     } catch (error) {
+      console.error("Error validating RPC:", error);
       setError("Failed to validate RPC URL");
-      console.error("RPC validation error:", error);
     } finally {
       setIsValidating(false);
     }
@@ -225,7 +252,7 @@ export default function Home() {
                 onChange={(e) => {
                   const url = e.target.value;
                   setRpcUrl(url);
-                  handleRpcSubmit(url);
+                  handleRpcSubmit();
                 }}
                 placeholder="https://rpc.tenderly.co/fork/..."
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
@@ -254,7 +281,7 @@ export default function Home() {
               <button
                 onClick={(e) => {
                   e.preventDefault();
-                  handleRpcSubmit(rpcUrl);
+                  handleRpcSubmit();
                 }}
                 className="mt-3 w-full p-2 border border-black text-black bg-white hover:bg-gray-50 text-sm sm:text-base"
               >

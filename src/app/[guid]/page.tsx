@@ -23,27 +23,12 @@ export default async function GuidPage({
       throw new Error("Invalid RPC URL format");
     }
 
-    const isValid = await validateProvider(rpcUrl);
-
-    if (isValid) {
-      const response = NextResponse.redirect(
-        new URL(
-          "/",
-          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-        )
-      );
-      response.cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl, {
-        path: "/",
-        sameSite: "lax",
-      });
-      return response;
-    }
-
-    // If we get here, the RPC was invalid
+    // Instead of validating the provider here, we'll just store the URL
+    // The actual validation will happen on the client side
     const response = NextResponse.redirect(
       new URL("/", process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000")
     );
-    response.cookies.set(STORAGE_KEYS.ERROR, "Invalid RPC URL", {
+    response.cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl, {
       path: "/",
       sameSite: "lax",
     });
@@ -51,15 +36,7 @@ export default async function GuidPage({
   } catch (error) {
     let errorMessage = "Invalid RPC URL";
     if (error instanceof Error) {
-      try {
-        const info = JSON.parse(error.message.split("info=")[1] || "{}");
-        if (info.responseBody) {
-          const response = JSON.parse(info.responseBody);
-          errorMessage = response.message || errorMessage;
-        }
-      } catch {
-        errorMessage = error.message;
-      }
+      errorMessage = error.message;
     }
 
     const response = NextResponse.redirect(
