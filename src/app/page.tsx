@@ -8,10 +8,8 @@ import {
   isValidEthereumAddress,
   isValidERC20,
   getAllBalances,
-  setProvider,
   validateProvider,
 } from "@/utils/faucet";
-import { useSearchParams } from "next/navigation";
 import Cookies from "js-cookie";
 
 const STORAGE_KEYS = {
@@ -21,7 +19,6 @@ const STORAGE_KEYS = {
 };
 
 export default function Home() {
-  const searchParams = useSearchParams();
   const [showRpcInput, setShowRpcInput] = useState(true);
   const [rpcUrl, setRpcUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -72,8 +69,9 @@ export default function Home() {
       } else {
         setError("Invalid RPC URL");
       }
-    } catch (err) {
+    } catch (error) {
       setError("Failed to validate RPC URL");
+      console.error("RPC validation error:", error);
     } finally {
       setIsValidating(false);
     }

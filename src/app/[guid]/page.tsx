@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { validateProvider } from "@/utils/faucet";
 import { RPC_CONFIG } from "@/config/rpc";
 import { NextResponse } from "next/server";
