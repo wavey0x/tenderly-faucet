@@ -208,7 +208,7 @@ export default function Home() {
         <div className="fixed inset-0 bg-white flex items-start sm:items-center justify-center z-50 p-4">
           <div className="w-full max-w-md">
             <h2 className="text-lg sm:text-xl mb-3 font-mono text-black">
-              Set Tenderly RPC URL
+              Input Tenderly Admin RPC URL
             </h2>
             <div className="relative">
               <input
