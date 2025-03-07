@@ -1,4 +1,4 @@
-interface Token {
+export interface Token {
   address: string;
   symbol: string;
   name: string;
@@ -15,21 +15,39 @@ export const PRESET_TOKENS: Token[] = [
     isEth: true,
   },
   {
-    address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-    symbol: "WETH",
-    name: "Wrapped Ether",
+    address: "0x57aB1E0003F623289CD798B1824Be09a793e4Bec",
+    symbol: "reUSD",
+    name: "reUSD Stablecoin",
     decimals: 18,
   },
   {
-    address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-    symbol: "DAI",
-    name: "Dai Stablecoin",
+    address: "0x419905009e4656fdC02418C7Df35B1E61Ed5F726",
+    symbol: "RSUP",
+    name: "RSUP Governance Token",
     decimals: 18,
   },
   {
-    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    symbol: "USDC",
-    name: "USD Coin",
-    decimals: 6,
+    address: "0x14361C243174794E2207296a6AD59bb0Dec1d388",
+    symbol: "crvUSD-sDOLA",
+    name: "Curve Lend - crvUSD sDOLA",
+    decimals: 18,
+  },
+  {
+    address: "0xaB3cb84c310186B2Fa4B4503624A5D90b5DcB22D",
+    symbol: "frxUSD-sfrxETH",
+    name: "Fraxlend - frxUSD sfrxETH",
+    decimals: 18,
+  },
+  {
+    address: "0xB6aF437ceEa0DBeA524115eFC905F0F44fd1eBAF",
+    symbol: "Curve Pool: reUSD-sfrxUSD",
+    name: "Curve Pool: reUSD-sfrxUSD",
+    decimals: 18,
+  },
+  {
+    address: "0xA6d9F4f3A67B35E81DFa560b0FcDE9B0751F1f53",
+    symbol: "Curve Pool: reUSD-scrvUSD",
+    name: "Curve Pool: reUSD-scrvUSD",
+    decimals: 18,
   },
 ];
