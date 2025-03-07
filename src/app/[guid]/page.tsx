@@ -4,10 +4,10 @@ import { NextResponse } from "next/server";
 export default async function GuidPage({
   params,
 }: {
-  params: { guid: string };
+  params: Promise<{ guid: string }>;
 }) {
   try {
-    const { guid } = params;
+    const { guid } = await params;
     if (!guid || typeof guid !== "string") {
       throw new Error("Invalid GUID");
     }
