@@ -295,7 +295,7 @@ export default function Home() {
       <main className="p-3 sm:p-4 max-w-md mx-auto font-mono text-black">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-lg sm:text-xl">Token Faucet</h1>
-          {!showRpcInput && isValidating && (
+          {!showRpcInput && validRpc && (
             <button
               onClick={() => setShowRpcInput(true)}
               className="text-xs sm:text-sm px-2 py-1 border border-black hover:bg-gray-50"
@@ -305,7 +305,7 @@ export default function Home() {
           )}
         </div>
 
-        {isValidating && !showRpcInput && (
+        {validRpc && !showRpcInput && (
           <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Token</label>

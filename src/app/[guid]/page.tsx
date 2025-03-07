@@ -1,4 +1,3 @@
-import { validateProvider } from "@/utils/faucet";
 import { RPC_CONFIG } from "@/config/rpc";
 import { NextResponse } from "next/server";
 
