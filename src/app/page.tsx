@@ -303,23 +303,21 @@ export default function Home() {
                 }}
                 placeholder="Enter full RPC URL or just the GUID (e.g. 4249ff26-95dc-488b-8f35-a6ca53ecebb3)"
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
-                  rpcUrl && !isValidating ? "border-black" : "border-red-500"
+                  rpcUrl && !isValidating && !validRpc
+                    ? "border-red-500"
+                    : "border-black"
                 }`}
                 required
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
                 {isValidating ? (
                   <span className="text-gray-400">...</span>
-                ) : rpcUrl ? (
-                  isValidating ? (
-                    <span className="text-gray-400">...</span>
-                  ) : (
-                    <span className="text-green-500">✓</span>
-                  )
+                ) : rpcUrl && validRpc ? (
+                  <span className="text-green-500">✓</span>
                 ) : null}
               </div>
             </div>
-            {rpcUrl && !isValidating && !error && (
+            {rpcUrl && !isValidating && !validRpc && (
               <div className="text-red-500 text-xs mt-1">
                 Invalid or unreachable RPC URL
               </div>
