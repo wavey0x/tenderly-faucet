@@ -22,20 +22,13 @@ export default async function GuidPage({
       throw new Error("Invalid RPC URL format");
     }
 
-    // Create a simple object with the URL
-    const data = { url: rpcUrl };
-
-    // Create the response with the data
     const response = NextResponse.redirect(
       new URL("/", process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000")
     );
-
-    // Set the URL in a cookie
-    response.cookies.set(STORAGE_KEYS.TENDERLY_URL, JSON.stringify(data), {
+    response.cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl, {
       path: "/",
       sameSite: "lax",
     });
-
     return response;
   } catch (error) {
     let errorMessage = "Invalid RPC URL";
