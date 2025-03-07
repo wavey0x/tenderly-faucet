@@ -14,7 +14,15 @@ export default async function GuidPage({
 }) {
   try {
     const { guid } = await params;
+    if (!guid || typeof guid !== "string") {
+      throw new Error("Invalid GUID");
+    }
+
     const rpcUrl = RPC_CONFIG.buildUrl(guid);
+    if (!rpcUrl.startsWith("http")) {
+      throw new Error("Invalid RPC URL format");
+    }
+
     const isValid = await validateProvider(rpcUrl);
 
     if (isValid) {
