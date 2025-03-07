@@ -6,10 +6,22 @@ let provider: ethers.JsonRpcProvider | null = null;
 export async function validateProvider(rpcUrl: string): Promise<boolean> {
   try {
     // Clean the URL and ensure it's properly formatted
-    const cleanUrl = rpcUrl.trim();
+    const cleanUrl = rpcUrl.replace(/\s+/g, "");
+
+    // Debug log
+    console.log("Validating RPC URL:", {
+      originalUrl: rpcUrl,
+      cleanUrl,
+      hasSpaces: rpcUrl.includes(" "),
+      startsWithHttp: cleanUrl.startsWith("http"),
+    });
+
     if (!cleanUrl.startsWith("http")) {
       throw new Error("Invalid URL format");
     }
+
+    // Try to construct a URL object to validate format
+    new URL(cleanUrl);
 
     const tempProvider = new ethers.JsonRpcProvider(cleanUrl);
     // Try to get chain ID - this will fail if the RPC is invalid
