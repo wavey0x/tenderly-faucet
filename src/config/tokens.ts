@@ -27,6 +27,18 @@ export const PRESET_TOKENS: Token[] = [
     decimals: 18,
   },
   {
+    address: "0xCAcd6fd266aF91b8AeD52aCCc382b4e165586E29",
+    symbol: "frxUSD",
+    name: "frxUSD",
+    decimals: 18,
+  },
+  {
+    address: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+    symbol: "crvUSD",
+    name: "crvUSD",
+    decimals: 18,
+  },
+  {
     address: "0x14361C243174794E2207296a6AD59bb0Dec1d388",
     symbol: "crvUSD-sDOLA",
     name: "Curve Lend - crvUSD sDOLA",
