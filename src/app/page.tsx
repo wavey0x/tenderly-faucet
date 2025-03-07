@@ -10,12 +10,9 @@ import {
   getAllBalances,
   validateProvider,
 } from "@/utils/faucet";
-import Cookies from "js-cookie";
 
 const STORAGE_KEYS = {
-  TENDERLY_URL: "tenderly-faucet-url",
   SAVED_ADDRESSES: "tenderly-faucet-addresses",
-  ERROR: "tenderly-faucet-error",
 };
 
 export default function Home() {
@@ -40,33 +37,29 @@ export default function Home() {
   const [validRpc, setValidRpc] = useState(false);
 
   useEffect(() => {
-    // Check for RPC URL in cookies
-    const storedData = Cookies.get(STORAGE_KEYS.TENDERLY_URL);
-    const storedError = Cookies.get(STORAGE_KEYS.ERROR);
+    // Check for RPC URL in URL params
+    const params = new URLSearchParams(window.location.search);
+    const urlRpc = params.get("rpc");
+    const urlError = params.get("error");
 
-    if (storedData) {
-      try {
-        const data = JSON.parse(storedData);
-        if (data.url) {
-          setRpcUrl(data.url);
-          setShowRpcInput(false);
-        }
-      } catch (error) {
-        console.error("Error parsing stored RPC data:", error);
-      }
+    if (urlRpc) {
+      setRpcUrl(urlRpc);
+      setShowRpcInput(false);
+      // Clear the URL params
+      window.history.replaceState({}, "", "/");
     }
 
-    if (storedError) {
-      setError(storedError);
-      // Clear the error cookie after reading it
-      Cookies.remove(STORAGE_KEYS.ERROR);
+    if (urlError) {
+      setError(urlError);
+      // Clear the URL params
+      window.history.replaceState({}, "", "/");
     }
   }, []);
 
   // Add this effect to validate the RPC URL when it's loaded from localStorage
   useEffect(() => {
     const validateStoredRpc = async () => {
-      const storedUrl = localStorage.getItem(STORAGE_KEYS.TENDERLY_URL);
+      const storedUrl = localStorage.getItem("tenderly-faucet-url");
       if (storedUrl) {
         try {
           const isValid = await validateProvider(storedUrl);
@@ -76,11 +69,11 @@ export default function Home() {
             setShowRpcInput(false);
           } else {
             // If the stored URL is invalid, clear it
-            localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
+            localStorage.removeItem("tenderly-faucet-url");
           }
         } catch (error) {
           console.error("Error validating stored RPC:", error);
-          localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
+          localStorage.removeItem("tenderly-faucet-url");
         }
       }
     };
@@ -99,7 +92,7 @@ export default function Home() {
       if (isValid) {
         setValidRpc(true);
         setShowRpcInput(false);
-        localStorage.setItem(STORAGE_KEYS.TENDERLY_URL, rpcUrl);
+        localStorage.setItem("tenderly-faucet-url", rpcUrl);
       } else {
         setError("Invalid or unreachable RPC URL");
       }
