@@ -11,10 +11,6 @@ import {
   setProvider,
   validateProvider,
 } from "@/utils/faucet";
-import { FaucetForm } from "@/components/FaucetForm";
-import { WalletInfo } from "@/components/WalletInfo";
-import { FaucetHeader } from "@/components/FaucetHeader";
-import { FaucetFooter } from "@/components/FaucetFooter";
 import { useSearchParams } from "next/navigation";
 import Cookies from "js-cookie";
 
@@ -37,7 +33,7 @@ export default function Home() {
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
   const [balances, setBalances] = useState<{
     ETH: string;
     tokens: Record<string, string>;
@@ -105,7 +101,7 @@ export default function Home() {
 
   // Reset success message when inputs change
   useEffect(() => {
-    setSuccess("");
+    setSuccess(null);
   }, [recipient, amount, selectedToken, customToken, useCustomToken]);
 
   useEffect(() => {
@@ -168,8 +164,8 @@ export default function Home() {
     }
 
     setLoading(true);
-    setError("");
-    setSuccess("");
+    setError(null);
+    setSuccess(null);
 
     try {
       const tokenAddress = useCustomToken ? customToken : selectedToken;
