@@ -138,8 +138,8 @@ export default function Home() {
         try {
           const balances = await getAllBalances(recipient);
           setBalances(balances);
-        } catch (err) {
-          console.error("Error fetching balances:", err);
+        } catch (error) {
+          console.error("Error fetching balances:", error);
           setBalances(null);
         }
       } else {
@@ -190,8 +190,8 @@ export default function Home() {
       // Refresh balances
       const newBalances = await getAllBalances(recipient);
       setBalances(newBalances);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setLoading(false);
     }
