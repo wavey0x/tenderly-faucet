@@ -10,9 +10,10 @@ const STORAGE_KEYS = {
 export default async function GuidPage({
   params,
 }: {
-  params: { guid: string };
+  params: Promise<{ guid: string }>;
 }) {
-  const rpcUrl = RPC_CONFIG.buildUrl(params.guid);
+  const { guid } = await params;
+  const rpcUrl = RPC_CONFIG.buildUrl(guid);
 
   try {
     const isValid = await validateProvider(rpcUrl);
