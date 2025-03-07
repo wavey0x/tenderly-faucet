@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import { PRESET_TOKENS, Token } from "@/config/tokens";
+import { RPC_CONFIG } from "@/config/rpc";
 
 let provider: ethers.JsonRpcProvider | null = null;
 
@@ -16,6 +17,19 @@ export async function validateProvider(rpcUrl: string): Promise<boolean> {
       startsWithHttp: cleanUrl.startsWith("http"),
     });
 
+    // Check if it's a GUID
+    if (
+      cleanUrl.match(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      )
+    ) {
+      const fullUrl = RPC_CONFIG.buildUrl(cleanUrl);
+      const tempProvider = new ethers.JsonRpcProvider(fullUrl);
+      await tempProvider.getNetwork();
+      return true;
+    }
+
+    // Handle full URL case
     if (!cleanUrl.startsWith("http")) {
       throw new Error("Invalid URL format");
     }

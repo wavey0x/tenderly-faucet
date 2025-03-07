@@ -49,6 +49,8 @@ export default function Home() {
         setRpcUrl(rpcUrl);
         setShowRpcInput(false);
         setValidRpc(true);
+        // Save to localStorage when loading from URL
+        localStorage.setItem("tenderly-faucet-url", rpcUrl);
         // Clear the URL params
         window.history.replaceState({}, "", "/");
       } catch {
@@ -92,6 +94,8 @@ export default function Home() {
 
     setIsValidating(true);
     setError(null);
+    // Clear localStorage at the start of validation
+    localStorage.removeItem("tenderly-faucet-url");
 
     try {
       // Check if input is a GUID (just the UUID part)
@@ -249,6 +253,12 @@ export default function Home() {
     }
   };
 
+  // Update the Change RPC button click handler
+  const handleChangeRpc = () => {
+    setShowRpcInput(true);
+    // Don't clear the current RPC URL when opening the input
+  };
+
   return (
     <div className="min-h-screen bg-white relative overflow-hidden">
       {success && (
@@ -322,7 +332,7 @@ export default function Home() {
           <h1 className="text-lg sm:text-xl">Token Faucet</h1>
           {!showRpcInput && validRpc && (
             <button
-              onClick={() => setShowRpcInput(true)}
+              onClick={handleChangeRpc}
               className="text-xs sm:text-sm px-2 py-1 border border-black hover:bg-gray-50"
             >
               Change RPC
