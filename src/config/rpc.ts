@@ -5,5 +5,9 @@ export const RPC_CONFIG = {
     "https://virtual.mainnet.rpc.tenderly.co",
 
   // Function to build the full RPC URL from a GUID
-  buildUrl: (guid: string) => `${RPC_CONFIG.BASE_URL}/${guid.trim()}`,
+  buildUrl: (guid: string) => {
+    const cleanGuid = guid.trim();
+    const baseUrl = RPC_CONFIG.BASE_URL.trim();
+    return `${baseUrl}/${cleanGuid}`;
+  },
 };
