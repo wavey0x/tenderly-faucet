@@ -94,8 +94,12 @@ export default function Home() {
     setError(null);
 
     try {
-      // Check if input is a GUID
-      if (rpcUrl.includes("4249ff26-95dc-488b-8f35-a6ca53ecebb3")) {
+      // Check if input is a GUID (just the UUID part)
+      if (
+        rpcUrl.match(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        )
+      ) {
         const fullUrl = RPC_CONFIG.buildUrl(rpcUrl);
         const isValid = await validateProvider(fullUrl);
         if (isValid) {
