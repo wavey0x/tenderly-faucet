@@ -11,6 +11,12 @@ import {
   setProvider,
   validateProvider,
 } from "@/utils/faucet";
+import { FaucetForm } from "@/components/FaucetForm";
+import { WalletInfo } from "@/components/WalletInfo";
+import { FaucetHeader } from "@/components/FaucetHeader";
+import { FaucetFooter } from "@/components/FaucetFooter";
+import { useSearchParams } from "next/navigation";
+import Cookies from "js-cookie";
 
 const STORAGE_KEYS = {
   TENDERLY_URL: "tenderly-faucet-url",
@@ -19,9 +25,10 @@ const STORAGE_KEYS = {
 };
 
 export default function Home() {
+  const searchParams = useSearchParams();
   const [showRpcInput, setShowRpcInput] = useState(true);
-  const [tenderlyUrl, setTenderlyUrl] = useState("");
-  const [isValidUrl, setIsValidUrl] = useState(false);
+  const [rpcUrl, setRpcUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<string[]>([]);
   const [useCustomToken, setUseCustomToken] = useState(false);
@@ -30,8 +37,7 @@ export default function Home() {
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [success, setSuccess] = useState(false);
   const [balances, setBalances] = useState<{
     ETH: string;
     tokens: Record<string, string>;
@@ -39,55 +45,51 @@ export default function Home() {
   const [isValidAddress, setIsValidAddress] = useState(false);
   const [isValidToken, setIsValidToken] = useState(true);
 
-  // Load saved data from localStorage
   useEffect(() => {
-    const savedUrl = localStorage.getItem(STORAGE_KEYS.TENDERLY_URL);
-    const savedError = localStorage.getItem(STORAGE_KEYS.ERROR);
+    // Check for RPC URL in cookies
+    const storedUrl = Cookies.get(STORAGE_KEYS.TENDERLY_URL);
+    const storedError = Cookies.get(STORAGE_KEYS.ERROR);
 
-    if (savedError) {
-      setError(savedError);
-      localStorage.removeItem(STORAGE_KEYS.ERROR);
-      setShowRpcInput(true);
-    }
-
-    if (savedUrl && !savedError) {
-      setTenderlyUrl(savedUrl);
-      validateAndSetUrl(savedUrl);
+    if (storedUrl) {
+      setRpcUrl(storedUrl);
       setShowRpcInput(false);
     }
 
+    if (storedError) {
+      setError(storedError);
+      // Clear the error cookie after reading it
+      Cookies.remove(STORAGE_KEYS.ERROR);
+    }
+  }, []);
+
+  const handleRpcSubmit = async (url: string) => {
+    setIsValidating(true);
+    setError(null);
+
+    try {
+      const isValid = await validateProvider(url);
+      if (isValid) {
+        setRpcUrl(url);
+        setShowRpcInput(false);
+        // Store in cookie
+        Cookies.set(STORAGE_KEYS.TENDERLY_URL, url, { path: "/" });
+      } else {
+        setError("Invalid RPC URL");
+      }
+    } catch (err) {
+      setError("Failed to validate RPC URL");
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  // Load saved data from localStorage
+  useEffect(() => {
     const addresses = localStorage.getItem(STORAGE_KEYS.SAVED_ADDRESSES);
     if (addresses) {
       setSavedAddresses(JSON.parse(addresses));
     }
   }, []);
-
-  // Validate and set Tenderly URL
-  const validateAndSetUrl = async (url: string) => {
-    if (!url) {
-      setIsValidUrl(false);
-      return;
-    }
-
-    setIsValidating(true);
-    try {
-      const isValid = await validateProvider(url);
-      if (isValid) {
-        setProvider(url);
-        setIsValidUrl(true);
-        localStorage.setItem(STORAGE_KEYS.TENDERLY_URL, url);
-      } else {
-        setIsValidUrl(false);
-        localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
-      }
-    } catch (err) {
-      setIsValidUrl(false);
-      localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
-      console.error("Invalid Tenderly URL:", err);
-    } finally {
-      setIsValidating(false);
-    }
-  };
 
   // Save valid addresses
   useEffect(() => {
@@ -225,42 +227,44 @@ export default function Home() {
             <div className="relative">
               <input
                 type="text"
-                value={tenderlyUrl}
+                value={rpcUrl}
                 onChange={(e) => {
                   const url = e.target.value;
-                  setTenderlyUrl(url);
-                  validateAndSetUrl(url);
-                  setError(""); // Clear error when user starts typing
+                  setRpcUrl(url);
+                  handleRpcSubmit(url);
                 }}
                 placeholder="https://rpc.tenderly.co/fork/..."
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
-                  tenderlyUrl && !isValidUrl ? "border-red-500" : "border-black"
+                  rpcUrl && !isValidating ? "border-black" : "border-red-500"
                 }`}
                 required
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
                 {isValidating ? (
                   <span className="text-gray-400">...</span>
-                ) : tenderlyUrl ? (
-                  isValidUrl ? (
-                    <span className="text-green-500">✓</span>
+                ) : rpcUrl ? (
+                  isValidating ? (
+                    <span className="text-gray-400">...</span>
                   ) : (
-                    <span className="text-red-500">✗</span>
+                    <span className="text-green-500">✓</span>
                   )
                 ) : null}
               </div>
             </div>
-            {tenderlyUrl && !isValidUrl && !isValidating && !error && (
+            {rpcUrl && !isValidating && !error && (
               <div className="text-red-500 text-xs mt-1">
                 Invalid or unreachable RPC URL
               </div>
             )}
-            {isValidUrl && (
+            {isValidating && (
               <button
-                onClick={() => setShowRpcInput(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleRpcSubmit(rpcUrl);
+                }}
                 className="mt-3 w-full p-2 border border-black text-black bg-white hover:bg-gray-50 text-sm sm:text-base"
               >
-                Continue
+                Validate
               </button>
             )}
           </div>
@@ -270,7 +274,7 @@ export default function Home() {
       <main className="p-3 sm:p-4 max-w-md mx-auto font-mono text-black">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-lg sm:text-xl">Token Faucet</h1>
-          {!showRpcInput && isValidUrl && (
+          {!showRpcInput && isValidating && (
             <button
               onClick={() => setShowRpcInput(true)}
               className="text-xs sm:text-sm px-2 py-1 border border-black hover:bg-gray-50"
@@ -280,7 +284,7 @@ export default function Home() {
           )}
         </div>
 
-        {isValidUrl && !showRpcInput && (
+        {isValidating && !showRpcInput && (
           <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Token</label>
