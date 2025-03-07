@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { validateProvider } from "@/utils/faucet";
 import { RPC_CONFIG } from "@/config/rpc";
+import { NextResponse } from "next/server";
 
 const STORAGE_KEYS = {
   TENDERLY_URL: "tenderly-faucet-url",
@@ -19,28 +20,35 @@ export default async function GuidPage({
     if (isValid) {
       // Store the valid RPC URL in a cookie instead of localStorage
       // This will be accessible on the client side
-      const response = redirect("/");
+      const response = NextResponse.redirect(
+        new URL(
+          "/",
+          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+        )
+      );
       response.cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl, {
         path: "/",
         sameSite: "lax",
       });
       return response;
     }
-  } catch (err) {
+  } catch (error) {
     let errorMessage = "Invalid RPC URL";
-    if (err instanceof Error) {
+    if (error instanceof Error) {
       try {
-        const info = JSON.parse(err.message.split("info=")[1] || "{}");
+        const info = JSON.parse(error.message.split("info=")[1] || "{}");
         if (info.responseBody) {
           const response = JSON.parse(info.responseBody);
           errorMessage = response.message || errorMessage;
         }
-      } catch (e) {
-        errorMessage = err.message;
+      } catch {
+        errorMessage = error.message;
       }
     }
 
-    const response = redirect("/");
+    const response = NextResponse.redirect(
+      new URL("/", process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000")
+    );
     response.cookies.set(STORAGE_KEYS.ERROR, errorMessage, {
       path: "/",
       sameSite: "lax",
@@ -49,7 +57,9 @@ export default async function GuidPage({
   }
 
   // If we get here, the RPC was invalid
-  const response = redirect("/");
+  const response = NextResponse.redirect(
+    new URL("/", process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000")
+  );
   response.cookies.set(STORAGE_KEYS.ERROR, "Invalid RPC URL", {
     path: "/",
     sameSite: "lax",

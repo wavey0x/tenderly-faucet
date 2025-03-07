@@ -97,7 +97,7 @@ export default function Home() {
         JSON.stringify(newAddresses)
       );
     }
-  }, [isValidAddress, recipient]);
+  }, [isValidAddress, recipient, savedAddresses]);
 
   // Reset success message when inputs change
   useEffect(() => {
