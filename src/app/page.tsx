@@ -50,7 +50,7 @@ export default function Home() {
         setShowRpcInput(false);
         // Clear the URL params
         window.history.replaceState({}, "", "/");
-      } catch (error) {
+      } catch {
         setError("Invalid GUID format");
         window.history.replaceState({}, "", "/");
       }
