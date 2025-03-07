@@ -15,6 +15,7 @@ import {
 const STORAGE_KEYS = {
   TENDERLY_URL: "tenderly-faucet-url",
   SAVED_ADDRESSES: "tenderly-faucet-addresses",
+  ERROR: "tenderly-faucet-error",
 };
 
 export default function Home() {
@@ -41,7 +42,15 @@ export default function Home() {
   // Load saved data from localStorage
   useEffect(() => {
     const savedUrl = localStorage.getItem(STORAGE_KEYS.TENDERLY_URL);
-    if (savedUrl) {
+    const savedError = localStorage.getItem(STORAGE_KEYS.ERROR);
+
+    if (savedError) {
+      setError(savedError);
+      localStorage.removeItem(STORAGE_KEYS.ERROR);
+      setShowRpcInput(true);
+    }
+
+    if (savedUrl && !savedError) {
       setTenderlyUrl(savedUrl);
       validateAndSetUrl(savedUrl);
       setShowRpcInput(false);
@@ -69,9 +78,11 @@ export default function Home() {
         localStorage.setItem(STORAGE_KEYS.TENDERLY_URL, url);
       } else {
         setIsValidUrl(false);
+        localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
       }
     } catch (err) {
       setIsValidUrl(false);
+      localStorage.removeItem(STORAGE_KEYS.TENDERLY_URL);
       console.error("Invalid Tenderly URL:", err);
     } finally {
       setIsValidating(false);
@@ -210,6 +221,7 @@ export default function Home() {
             <h2 className="text-lg sm:text-xl mb-3 font-mono text-black">
               Input Tenderly Admin RPC URL
             </h2>
+            {error && <div className="text-red-500 text-sm mb-3">{error}</div>}
             <div className="relative">
               <input
                 type="text"
@@ -218,6 +230,7 @@ export default function Home() {
                   const url = e.target.value;
                   setTenderlyUrl(url);
                   validateAndSetUrl(url);
+                  setError(""); // Clear error when user starts typing
                 }}
                 placeholder="https://rpc.tenderly.co/fork/..."
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
@@ -237,7 +250,7 @@ export default function Home() {
                 ) : null}
               </div>
             </div>
-            {tenderlyUrl && !isValidUrl && !isValidating && (
+            {tenderlyUrl && !isValidUrl && !isValidating && !error && (
               <div className="text-red-500 text-xs mt-1">
                 Invalid or unreachable RPC URL
               </div>
