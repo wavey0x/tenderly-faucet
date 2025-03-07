@@ -259,6 +259,18 @@ export default function Home() {
     // Don't clear the current RPC URL when opening the input
   };
 
+  // Add this function to extract GUID from RPC URL
+  const getGuidFromUrl = (url: string) => {
+    try {
+      const match = url.match(
+        /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      );
+      return match ? match[0].slice(1) : null;
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white relative overflow-hidden">
       {success && (
@@ -331,12 +343,17 @@ export default function Home() {
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-lg sm:text-xl">Token Faucet</h1>
           {!showRpcInput && validRpc && (
-            <button
-              onClick={handleChangeRpc}
-              className="text-xs sm:text-sm px-2 py-1 border border-black hover:bg-gray-50"
-            >
-              Change RPC
-            </button>
+            <div className="relative group">
+              <button
+                onClick={handleChangeRpc}
+                className="text-xs sm:text-sm px-2 py-1 border border-black hover:bg-gray-50"
+              >
+                Change RPC
+              </button>
+              <div className="absolute right-0 top-full mt-2 px-2 py-1 bg-black text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {getGuidFromUrl(rpcUrl)}
+              </div>
+            </div>
           )}
         </div>
 
