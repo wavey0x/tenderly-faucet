@@ -10,6 +10,7 @@ import {
   getAllBalances,
   validateProvider,
 } from "@/utils/faucet";
+import { RPC_CONFIG } from "@/config/rpc";
 
 const STORAGE_KEYS = {
   SAVED_ADDRESSES: "tenderly-faucet-addresses",
@@ -37,21 +38,26 @@ export default function Home() {
   const [validRpc, setValidRpc] = useState(false);
 
   useEffect(() => {
-    // Check for RPC URL in URL params
+    // Check for GUID in URL params
     const params = new URLSearchParams(window.location.search);
-    const urlRpc = params.get("rpc");
+    const guid = params.get("guid");
     const urlError = params.get("error");
 
-    if (urlRpc) {
-      setRpcUrl(urlRpc);
-      setShowRpcInput(false);
-      // Clear the URL params
-      window.history.replaceState({}, "", "/");
+    if (guid) {
+      try {
+        const rpcUrl = RPC_CONFIG.buildUrl(guid);
+        setRpcUrl(rpcUrl);
+        setShowRpcInput(false);
+        // Clear the URL params
+        window.history.replaceState({}, "", "/");
+      } catch (error) {
+        setError("Invalid GUID format");
+        window.history.replaceState({}, "", "/");
+      }
     }
 
     if (urlError) {
       setError(urlError);
-      // Clear the URL params
       window.history.replaceState({}, "", "/");
     }
   }, []);
@@ -68,7 +74,6 @@ export default function Home() {
             setValidRpc(true);
             setShowRpcInput(false);
           } else {
-            // If the stored URL is invalid, clear it
             localStorage.removeItem("tenderly-faucet-url");
           }
         } catch (error) {
