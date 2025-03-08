@@ -204,6 +204,11 @@ export default function Home() {
 
       if (isValid) {
         try {
+          if (!provider) {
+            console.error("Provider is not initialized");
+            setError("Provider is not initialized");
+            return;
+          }
           const balances = await getAllBalances(provider, recipient);
           setBalances(balances);
         } catch (error) {
@@ -254,6 +259,11 @@ export default function Home() {
         }
         await setEthBalance(provider, recipient, amount);
       } else {
+        if (!provider) {
+          console.error("Provider is not initialized");
+          setError("Provider is not initialized");
+          return;
+        }
         await setTokenBalance(
           provider,
           tokenAddress,
@@ -266,6 +276,11 @@ export default function Home() {
       setSuccess("Balance updated successfully!");
 
       // Refresh balances
+      if (!provider) {
+        console.error("Provider is not initialized");
+        setError("Provider is not initialized");
+        return;
+      }
       const newBalances = await getAllBalances(provider, recipient);
       setBalances(newBalances);
     } catch (error) {
