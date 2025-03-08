@@ -1,8 +1,7 @@
 import { ethers } from "ethers";
 import { PRESET_TOKENS, Token } from "@/config/tokens";
 import { RPC_CONFIG } from "@/config/rpc";
-
-let provider: ethers.JsonRpcProvider | null = null;
+import { useProvider } from "../context/ProviderContext";
 
 export async function validateProvider(rpcUrl: string): Promise<boolean> {
   try {
@@ -42,20 +41,12 @@ export async function validateProvider(rpcUrl: string): Promise<boolean> {
     await tempProvider.getNetwork();
     return true;
   } catch (err) {
-    console.error("Failed to validate RPC URL:", err);
+    console.error(
+      "Failed to validate RPC URL:",
+      err instanceof Error ? err.message : JSON.stringify(err)
+    );
     return false;
   }
-}
-
-export function setProvider(rpcUrl: string) {
-  provider = new ethers.JsonRpcProvider(rpcUrl);
-}
-
-export function getProvider() {
-  if (!provider) {
-    throw new Error("Provider not initialized. Please set Tenderly URL first.");
-  }
-  return provider;
 }
 
 // Add this after the provider initialization
@@ -79,12 +70,13 @@ export async function isValidERC20(address: string): Promise<boolean> {
   if (address === "0x0000000000000000000000000000000000000000") return false;
 
   try {
+    const { provider } = useProvider();
     const erc20Abi = [
       "function decimals() view returns (uint8)",
       "function symbol() view returns (string)",
       "function balanceOf(address) view returns (uint256)",
     ];
-    const contract = new ethers.Contract(address, erc20Abi, getProvider());
+    const contract = new ethers.Contract(address, erc20Abi, provider);
 
     // Try to call basic ERC20 functions with a timeout
     const timeout = new Promise((_, reject) =>
@@ -127,7 +119,8 @@ export async function getAddressBalances(
   address: string,
   tokenAddress?: string
 ) {
-  const ethBalance = await getProvider().getBalance(address);
+  const { provider } = useProvider();
+  const ethBalance = await provider.getBalance(address);
 
   if (!tokenAddress) {
     return {
@@ -143,7 +136,7 @@ export async function getAddressBalances(
       "function decimals() view returns (uint8)",
       "function symbol() view returns (string)",
     ];
-    const contract = new ethers.Contract(tokenAddress, erc20Abi, getProvider());
+    const contract = new ethers.Contract(tokenAddress, erc20Abi, provider);
 
     // Add timeout to prevent hanging
     const timeout = new Promise<[string, number, string]>((_, reject) =>
@@ -174,7 +167,11 @@ export async function getAddressBalances(
   }
 }
 
-export async function setEthBalance(userAddress: string, amount: string) {
+export async function setEthBalance(
+  provider: ethers.JsonRpcProvider,
+  userAddress: string,
+  amount: string
+) {
   try {
     // Validate address
     if (!isValidEthereumAddress(userAddress)) {
@@ -184,8 +181,13 @@ export async function setEthBalance(userAddress: string, amount: string) {
     // Convert to wei
     const amountInWei = ethers.parseEther(amount);
 
-    // Make the RPC call - using the original working method name and format
-    const result = await getProvider().send("tenderly_setBalance", [
+    // Ensure provider is not null
+    if (!provider) {
+      throw new Error("Provider is null when attempting to set ETH balance.");
+    }
+
+    // Make the RPC call
+    const result = await provider.send("tenderly_setBalance", [
       userAddress,
       `0x${amountInWei.toString(16)}`,
     ]);
@@ -204,6 +206,7 @@ export async function setEthBalance(userAddress: string, amount: string) {
 }
 
 export async function setTokenBalance(
+  provider: ethers.JsonRpcProvider,
   tokenAddress: string,
   userAddress: string,
   amount: string,
@@ -222,7 +225,7 @@ export async function setTokenBalance(
     const amountInWei = ethers.parseUnits(amount, decimals);
 
     // Make the RPC call with simple array parameters
-    const result = await getProvider().send("tenderly_setErc20Balance", [
+    const result = await provider.send("tenderly_setErc20Balance", [
       tokenAddress,
       userAddress,
       `0x${amountInWei.toString(16)}`,
@@ -243,12 +246,15 @@ export async function setTokenBalance(
   }
 }
 
-export async function getAllBalances(address: string) {
+export async function getAllBalances(
+  provider: ethers.JsonRpcProvider,
+  address: string
+) {
   try {
     const multicall = new ethers.Contract(
       MULTICALL_ADDRESS,
       multicallAbi,
-      getProvider()
+      provider
     );
     const erc20Interface = new ethers.Interface([
       "function balanceOf(address) view returns (uint256)",
@@ -272,7 +278,7 @@ export async function getAllBalances(address: string) {
     });
 
     // Get ETH balance separately (not via multicall)
-    const ethBalance = await getProvider().getBalance(address);
+    const ethBalance = await provider.getBalance(address);
 
     // Execute multicall
     const [, returnData] = await multicall.aggregate(calls);

@@ -11,9 +11,13 @@ import {
   validateProvider,
 } from "@/utils/faucet";
 import { RPC_CONFIG } from "@/config/rpc";
+import { ethers } from "ethers";
+import Cookies from "js-cookie";
 
 const STORAGE_KEYS = {
   SAVED_ADDRESSES: "tenderly-faucet-addresses",
+  TENDERLY_URL: "tenderly-faucet-url",
+  ERROR: "tenderly-faucet-error",
 };
 
 export default function Home() {
@@ -36,6 +40,7 @@ export default function Home() {
   const [isValidAddress, setIsValidAddress] = useState(false);
   const [isValidToken, setIsValidToken] = useState(true);
   const [validRpc, setValidRpc] = useState(false);
+  const [provider, setProvider] = useState<ethers.JsonRpcProvider | null>(null);
 
   useEffect(() => {
     // Check for GUID in URL params
@@ -98,39 +103,41 @@ export default function Home() {
     localStorage.removeItem("tenderly-faucet-url");
 
     try {
+      let fullUrl = rpcUrl;
       // Check if input is a GUID (just the UUID part)
       if (
         rpcUrl.match(
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
         )
       ) {
-        const fullUrl = RPC_CONFIG.buildUrl(rpcUrl);
-        const isValid = await validateProvider(fullUrl);
-        if (isValid) {
-          setRpcUrl(fullUrl);
-          setValidRpc(true);
-          setShowRpcInput(false);
-          localStorage.setItem("tenderly-faucet-url", fullUrl);
-        } else {
-          setError("Invalid or unreachable RPC URL");
-        }
+        fullUrl = RPC_CONFIG.buildUrl(rpcUrl);
+      }
+      const isValid = await validateProvider(fullUrl);
+      if (isValid) {
+        setRpcUrl(fullUrl);
+        setValidRpc(true);
+        setShowRpcInput(false);
+        // Store the new valid URL in localStorage
+        localStorage.setItem("tenderly-faucet-url", fullUrl);
       } else {
-        // Handle full URL
-        const isValid = await validateProvider(rpcUrl);
-        if (isValid) {
-          setValidRpc(true);
-          setShowRpcInput(false);
-          localStorage.setItem("tenderly-faucet-url", rpcUrl);
-        } else {
-          setError("Invalid or unreachable RPC URL");
-        }
+        setError("Invalid or unreachable RPC URL");
       }
     } catch (error) {
-      console.error("Error validating RPC:", error);
+      console.error(
+        "Error validating RPC:",
+        error instanceof Error ? error.message : JSON.stringify(error)
+      );
       setError("Failed to validate RPC URL");
     } finally {
       setIsValidating(false);
     }
+  };
+
+  // Update the input change handler to prioritize user input
+  const handleRpcInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const url = e.target.value;
+    setRpcUrl(url);
+    setValidRpc(false); // Reset valid state until re-validated
   };
 
   // Load saved data from localStorage
@@ -192,7 +199,7 @@ export default function Home() {
 
       if (isValid) {
         try {
-          const balances = await getAllBalances(recipient);
+          const balances = await getAllBalances(provider, recipient);
           setBalances(balances);
         } catch (error) {
           console.error("Error fetching balances:", error);
@@ -204,16 +211,22 @@ export default function Home() {
     };
 
     checkAddressAndFetchBalances();
-  }, [recipient]);
+  }, [recipient, provider]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (
-      !isValidAddress ||
-      (!useCustomToken && !selectedToken) ||
-      (useCustomToken && !isValidToken)
-    ) {
-      setError("Invalid address or token");
+    if (!isValidAddress) {
+      setError("Invalid address");
+      return;
+    }
+
+    if (!useCustomToken && !selectedToken) {
+      setError("No token selected");
+      return;
+    }
+
+    if (useCustomToken && !isValidToken) {
+      setError("Invalid custom token");
       return;
     }
 
@@ -231,9 +244,13 @@ export default function Home() {
         tokenAddress === "0x0000000000000000000000000000000000000000" ||
         selectedTokenInfo?.isEth
       ) {
-        await setEthBalance(recipient, amount);
+        if (!provider) {
+          throw new Error("Provider not initialized");
+        }
+        await setEthBalance(provider, recipient, amount);
       } else {
         await setTokenBalance(
+          provider,
           tokenAddress,
           recipient,
           amount,
@@ -244,7 +261,7 @@ export default function Home() {
       setSuccess("Balance updated successfully!");
 
       // Refresh balances
-      const newBalances = await getAllBalances(recipient);
+      const newBalances = await getAllBalances(provider, recipient);
       setBalances(newBalances);
     } catch (error) {
       setError(error instanceof Error ? error.message : "An error occurred");
@@ -269,6 +286,51 @@ export default function Home() {
     } catch {
       return null;
     }
+  };
+
+  useEffect(() => {
+    if (validRpc && rpcUrl) {
+      // Initialize the provider here
+      try {
+        const newProvider = new ethers.JsonRpcProvider(rpcUrl);
+
+        // Override the send method to log requests
+        const originalSend = newProvider.send.bind(newProvider);
+        newProvider.send = async (method, params) => {
+          return originalSend(method, params);
+        };
+
+        setProvider(newProvider);
+        // Store the provider URL in cookies for persistence
+        Cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl);
+      } catch (error) {
+        console.error("Failed to initialize provider:", error);
+        setError("Failed to initialize provider");
+        // Store the error in cookies for better debugging
+        Cookies.set(
+          STORAGE_KEYS.ERROR,
+          error instanceof Error ? error.message : JSON.stringify(error)
+        );
+      }
+    }
+  }, [validRpc, rpcUrl]);
+
+  // Load the RPC URL from cookies on initial load
+  useEffect(() => {
+    const storedUrl = Cookies.get(STORAGE_KEYS.TENDERLY_URL);
+    if (storedUrl) {
+      setRpcUrl(storedUrl);
+      setValidRpc(true);
+    }
+  }, []);
+
+  const getProvider = () => {
+    if (!provider) {
+      throw new Error(
+        "Provider not initialized. Please set Tenderly URL first."
+      );
+    }
+    return provider;
   };
 
   return (
@@ -296,11 +358,7 @@ export default function Home() {
               <input
                 type="text"
                 value={rpcUrl}
-                onChange={(e) => {
-                  const url = e.target.value;
-                  setRpcUrl(url);
-                  handleRpcSubmit();
-                }}
+                onChange={handleRpcInputChange}
                 placeholder="Enter full RPC URL or just the GUID (e.g. 4249ff26-95dc-488b-8f35-a6ca53ecebb3)"
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
                   rpcUrl && !isValidating && !validRpc
@@ -410,7 +468,9 @@ export default function Home() {
                 <input
                   type="text"
                   value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
+                  onChange={(e) => {
+                    setRecipient(e.target.value);
+                  }}
                   placeholder="Address (0x...)"
                   className={`w-full p-2 text-sm sm:text-base border bg-white text-black ${
                     recipient && !isValidAddress
@@ -436,7 +496,9 @@ export default function Home() {
               <input
                 type="text"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                }}
                 placeholder="Enter amount"
                 className="w-full p-2 text-sm sm:text-base border border-black bg-white text-black"
                 required
