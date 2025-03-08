@@ -180,7 +180,7 @@ export default function Home() {
         setIsValidToken(true);
         return;
       }
-      const isValid = await isValidERC20(customToken);
+      const isValid = await isValidERC20(provider, customToken);
       setIsValidToken(isValid);
     };
     validateToken();

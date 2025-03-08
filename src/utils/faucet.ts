@@ -1,7 +1,6 @@
 import { ethers } from "ethers";
 import { PRESET_TOKENS, Token } from "@/config/tokens";
 import { RPC_CONFIG } from "@/config/rpc";
-import { useProvider } from "../context/ProviderContext";
 
 export async function validateProvider(rpcUrl: string): Promise<boolean> {
   try {
@@ -63,14 +62,16 @@ export function isValidEthereumAddress(address: string): boolean {
   }
 }
 
-export async function isValidERC20(address: string): Promise<boolean> {
+export async function isValidERC20(
+  provider: ethers.JsonRpcProvider,
+  address: string
+): Promise<boolean> {
   if (!isValidEthereumAddress(address)) return false;
 
   // Special case: ETH address
   if (address === "0x0000000000000000000000000000000000000000") return false;
 
   try {
-    const { provider } = useProvider();
     const erc20Abi = [
       "function decimals() view returns (uint8)",
       "function symbol() view returns (string)",
@@ -116,10 +117,10 @@ function formatBalance(amount: string, decimals: number = 18): string {
 }
 
 export async function getAddressBalances(
+  provider: ethers.JsonRpcProvider,
   address: string,
   tokenAddress?: string
 ) {
-  const { provider } = useProvider();
   const ethBalance = await provider.getBalance(address);
 
   if (!tokenAddress) {
