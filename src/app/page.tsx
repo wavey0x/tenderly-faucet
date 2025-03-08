@@ -184,7 +184,7 @@ export default function Home() {
       setIsValidToken(isValid);
     };
     validateToken();
-  }, [customToken, useCustomToken]);
+  }, [customToken, useCustomToken, provider]);
 
   useEffect(() => {
     const checkAddressAndFetchBalances = async () => {
@@ -323,15 +323,6 @@ export default function Home() {
       setValidRpc(true);
     }
   }, []);
-
-  const getProvider = () => {
-    if (!provider) {
-      throw new Error(
-        "Provider not initialized. Please set Tenderly URL first."
-      );
-    }
-    return provider;
-  };
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden">
