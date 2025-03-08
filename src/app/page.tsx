@@ -408,7 +408,7 @@ export default function Home() {
 
       <main className="p-3 sm:p-4 max-w-md mx-auto font-mono text-black">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-lg sm:text-xl">Token Faucet</h1>
+          <h1 className="text-lg sm:text-xl">🚰 Tenderly Token Faucet</h1>
           {!showRpcInput && validRpc && (
             <div className="relative group">
               <button
