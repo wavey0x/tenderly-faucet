@@ -180,6 +180,11 @@ export default function Home() {
         setIsValidToken(true);
         return;
       }
+      if (!provider) {
+        console.error("Provider is not initialized");
+        setIsValidToken(false);
+        return;
+      }
       const isValid = await isValidERC20(provider, customToken);
       setIsValidToken(isValid);
     };
