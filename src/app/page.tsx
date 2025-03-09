@@ -47,11 +47,14 @@ export default function Home() {
   const [timeUnit, setTimeUnit] = useState("seconds");
   const [currentTimestamp, setCurrentTimestamp] = useState<number | null>(null);
 
-  const modalRef = useRef(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (modalRef.current && !modalRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        modalRef.current &&
+        !modalRef.current.contains(event.target as Node)
+      ) {
         setShowTimestampModal(false);
       }
     };
@@ -72,9 +75,6 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     const guid = params.get("guid");
     const urlError = params.get("error");
-
-    console.log("GUID from URL:", guid);
-    console.log("Error from URL:", urlError);
 
     if (guid) {
       try {
