@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PRESET_TOKENS } from "@/config/tokens";
 import {
   setTokenBalance,
@@ -25,6 +25,7 @@ export default function Home() {
   const [rpcUrl, setRpcUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  const [validationComplete, setValidationComplete] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<string[]>([]);
   const [useCustomToken, setUseCustomToken] = useState(false);
   const [selectedToken, setSelectedToken] = useState(PRESET_TOKENS[0].address);
@@ -41,6 +42,30 @@ export default function Home() {
   const [isValidToken, setIsValidToken] = useState(true);
   const [validRpc, setValidRpc] = useState(false);
   const [provider, setProvider] = useState<ethers.JsonRpcProvider | null>(null);
+  const [showTimestampModal, setShowTimestampModal] = useState(false);
+  const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [timeUnit, setTimeUnit] = useState("seconds");
+  const [currentTimestamp, setCurrentTimestamp] = useState<number | null>(null);
+
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        setShowTimestampModal(false);
+      }
+    };
+
+    if (showTimestampModal) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showTimestampModal]);
 
   useEffect(() => {
     // Check for GUID in URL params
@@ -48,9 +73,13 @@ export default function Home() {
     const guid = params.get("guid");
     const urlError = params.get("error");
 
+    console.log("GUID from URL:", guid);
+    console.log("Error from URL:", urlError);
+
     if (guid) {
       try {
         const rpcUrl = RPC_CONFIG.buildUrl(guid);
+        console.log("Constructed RPC URL:", rpcUrl);
         setRpcUrl(rpcUrl);
         setShowRpcInput(false);
         setValidRpc(true);
@@ -62,6 +91,8 @@ export default function Home() {
         setError("Invalid GUID format");
         window.history.replaceState({}, "", "/");
       }
+    } else {
+      console.warn("No GUID found in URL");
     }
 
     if (urlError) {
@@ -70,7 +101,6 @@ export default function Home() {
     }
   }, []);
 
-  // Add this effect to validate the RPC URL when it's loaded from localStorage
   useEffect(() => {
     const validateStoredRpc = async () => {
       const storedUrl = localStorage.getItem("tenderly-faucet-url");
@@ -89,6 +119,7 @@ export default function Home() {
           localStorage.removeItem("tenderly-faucet-url");
         }
       }
+      setValidationComplete(true);
     };
 
     validateStoredRpc();
@@ -130,6 +161,7 @@ export default function Home() {
       setError("Failed to validate RPC URL");
     } finally {
       setIsValidating(false);
+      setValidationComplete(true);
     }
   };
 
@@ -181,15 +213,17 @@ export default function Home() {
         return;
       }
       if (!provider) {
-        console.error("Provider is not initialized");
-        setIsValidToken(false);
+        if (validationComplete) {
+          console.error("Provider is not initialized");
+          setIsValidToken(false);
+        }
         return;
       }
       const isValid = await isValidERC20(provider, customToken);
       setIsValidToken(isValid);
     };
     validateToken();
-  }, [customToken, useCustomToken, provider]);
+  }, [customToken, useCustomToken, provider, validationComplete]);
 
   useEffect(() => {
     const checkAddressAndFetchBalances = async () => {
@@ -205,8 +239,10 @@ export default function Home() {
       if (isValid) {
         try {
           if (!provider) {
-            console.error("Provider is not initialized");
-            setError("Provider is not initialized");
+            if (validationComplete) {
+              console.error("Provider is not initialized");
+              setError("Provider is not initialized");
+            }
             return;
           }
           const balances = await getAllBalances(provider, recipient);
@@ -221,7 +257,7 @@ export default function Home() {
     };
 
     checkAddressAndFetchBalances();
-  }, [recipient, provider]);
+  }, [recipient, provider, validationComplete]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,6 +282,8 @@ export default function Home() {
 
     try {
       const tokenAddress = useCustomToken ? customToken : selectedToken;
+      console.log("Using token address:", tokenAddress);
+
       const selectedTokenInfo = PRESET_TOKENS.find(
         (t) => t.address === tokenAddress
       );
@@ -284,6 +322,7 @@ export default function Home() {
       const newBalances = await getAllBalances(provider, recipient);
       setBalances(newBalances);
     } catch (error) {
+      console.error("Error during balance update:", error);
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setLoading(false);
@@ -309,40 +348,116 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (validRpc && rpcUrl) {
-      // Initialize the provider here
-      try {
-        const newProvider = new ethers.JsonRpcProvider(rpcUrl);
-
-        // Override the send method to log requests
-        const originalSend = newProvider.send.bind(newProvider);
-        newProvider.send = async (method, params) => {
-          return originalSend(method, params);
-        };
-
-        setProvider(newProvider);
-        // Store the provider URL in cookies for persistence
-        Cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl);
-      } catch (error) {
-        console.error("Failed to initialize provider:", error);
-        setError("Failed to initialize provider");
-        // Store the error in cookies for better debugging
-        Cookies.set(
-          STORAGE_KEYS.ERROR,
-          error instanceof Error ? error.message : JSON.stringify(error)
-        );
+    const initializeProvider = async () => {
+      if (validRpc && rpcUrl) {
+        try {
+          console.log("Initializing provider with RPC URL:", rpcUrl);
+          const newProvider = new ethers.JsonRpcProvider(rpcUrl);
+          setProvider(newProvider);
+          Cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl);
+        } catch (error) {
+          console.error("Failed to initialize provider:", error);
+          setError("Failed to initialize provider");
+          Cookies.set(
+            STORAGE_KEYS.ERROR,
+            error instanceof Error ? error.message : JSON.stringify(error)
+          );
+        }
+      } else {
+        console.warn("Provider not initialized: validRpc or rpcUrl is false");
       }
-    }
+    };
+
+    initializeProvider();
   }, [validRpc, rpcUrl]);
 
   // Load the RPC URL from cookies on initial load
   useEffect(() => {
     const storedUrl = Cookies.get(STORAGE_KEYS.TENDERLY_URL);
     if (storedUrl) {
+      console.log("Loaded RPC URL from cookies:", storedUrl);
       setRpcUrl(storedUrl);
       setValidRpc(true);
+    } else {
+      console.warn("No RPC URL found in cookies");
     }
   }, []);
+
+  useEffect(() => {
+    const fetchBlockchainTime = async () => {
+      if (!provider) {
+        if (validationComplete) {
+          setError("Provider is not initialized");
+        }
+        return;
+      }
+
+      try {
+        // Mine a new block to ensure the latest timestamp
+        await provider.send("evm_mine", []);
+
+        // Fetch the latest block
+        const block = await provider.getBlock("latest");
+        if (block) {
+          // Set the current timestamp from the block
+          setCurrentTimestamp(block.timestamp);
+        } else {
+          setError("Failed to fetch block data");
+        }
+      } catch (error) {
+        console.error("Error fetching blockchain time:", error);
+        setError("Failed to fetch blockchain time");
+      }
+    };
+
+    if (validationComplete) {
+      fetchBlockchainTime();
+    }
+  }, [provider, validationComplete]);
+
+  const advanceTimestamp = async () => {
+    let secondsToAdd = advanceAmount;
+    if (timeUnit === "days") {
+      secondsToAdd *= 86400;
+    } else if (timeUnit === "weeks") {
+      secondsToAdd *= 604800;
+    }
+
+    if (!provider) {
+      setError("Provider is not initialized");
+      return;
+    }
+
+    try {
+      // Increase the blockchain time
+      await provider.send("evm_increaseTime", [
+        `0x${secondsToAdd.toString(16)}`,
+      ]);
+
+      // Mine a new block to apply the time change
+      await provider.send("evm_mine", []);
+
+      // Fetch the latest block to get the new timestamp
+      const block = await provider.getBlock("latest");
+      if (block) {
+        setCurrentTimestamp(block.timestamp);
+
+        // Perform the animation to indicate success
+        const timestampElement = document.getElementById("timestamp-display");
+        if (timestampElement) {
+          timestampElement.classList.add("text-green-500");
+          setTimeout(() => {
+            timestampElement.classList.remove("text-green-500");
+          }, 500);
+        }
+      } else {
+        setError("Failed to fetch block data");
+      }
+    } catch (error) {
+      console.error("Error advancing timestamp:", error);
+      setError("Failed to advance timestamp");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden">
@@ -533,6 +648,28 @@ export default function Home() {
               {loading ? "..." : "Fund"}
             </button>
 
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setShowTimestampModal(true);
+              }}
+              className="block text-center mt-2 text-sm text-gray-600"
+            >
+              ⏱️{" "}
+              {currentTimestamp !== null
+                ? new Date(currentTimestamp * 1000).toLocaleString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "numeric",
+                    minute: "numeric",
+                    hour12: true,
+                  })
+                : "Loading..."}
+            </a>
+
             {error && (
               <div className="text-red-500 text-xs sm:text-sm">{error}</div>
             )}
@@ -565,6 +702,63 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {showTimestampModal && (
+        <div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+          <div
+            ref={modalRef}
+            className="bg-white p-4 rounded shadow-lg max-w-sm w-full relative"
+          >
+            <button
+              onClick={() => setShowTimestampModal(false)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+            >
+              &times;
+            </button>
+            <h3 className="text-lg font-bold mb-2 text-black">
+              Set EVM Timestamp
+            </h3>
+            <div className="mb-2">
+              <label className="block text-sm mb-1 text-black">
+                Advance by:
+              </label>
+              <input
+                type="number"
+                value={advanceAmount}
+                onChange={(e) => setAdvanceAmount(Number(e.target.value))}
+                className="w-full p-2 border border-gray-300 rounded text-black"
+              />
+            </div>
+            <div className="mb-2">
+              <select
+                value={timeUnit}
+                onChange={(e) => setTimeUnit(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded text-black"
+              >
+                <option value="seconds">Seconds</option>
+                <option value="days">Days</option>
+                <option value="weeks">Weeks</option>
+              </select>
+            </div>
+            <div className="mb-2">
+              <p className="text-black">
+                {currentTimestamp !== null
+                  ? new Date(currentTimestamp * 1000).toLocaleString() +
+                    " | " +
+                    currentTimestamp
+                  : "Loading..."}
+              </p>
+            </div>
+            <button
+              onClick={advanceTimestamp}
+              className="w-full p-2 bg-gray-200 text-black rounded hover:bg-gray-300"
+            >
+              Advance chain timestamp
+            </button>
+            {error && <div className="text-red-500 text-xs mt-2">{error}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
