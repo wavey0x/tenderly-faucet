@@ -62,4 +62,22 @@ export const PRESET_TOKENS: Token[] = [
     name: "Curve Pool: reUSD-scrvUSD",
     decimals: 18,
   },
+  {
+    address: "0xdA47862a83dac0c112BA89c6abC2159b95afd71C",
+    symbol: "PRISMA",
+    name: "Prisma Governance Token",
+    decimals: 18,
+  },
+  {
+    address: "0xe3668873D944E4A949DA05fc8bDE419eFF543882",
+    symbol: "yPRISMA",
+    name: "Yearn Prisma",
+    decimals: 18,
+  },
+  {
+    address: "0x34635280737b5BFe6c7DC2FC3065D60d66e78185",
+    symbol: "cvxPRISMA",
+    name: "Convex Prisma",
+    decimals: 18,
+  },
 ];
