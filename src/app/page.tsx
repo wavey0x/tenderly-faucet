@@ -13,7 +13,12 @@ import {
 import { RPC_CONFIG } from "@/config/rpc";
 import { STORAGE_KEYS } from "@/config/constants";
 import { ethers } from "ethers";
-import Cookies from "js-cookie";
+import {
+  saveRpcCache,
+  loadRpcCache,
+  clearRpcCache,
+  updateRpcCacheUsage,
+} from "@/utils/rpcCache";
 
 export default function Home() {
   const [showRpcInput, setShowRpcInput] = useState(true);
@@ -44,8 +49,10 @@ export default function Home() {
   const [timeUnit, setTimeUnit] = useState("seconds");
   const [currentTimestamp, setCurrentTimestamp] = useState<number | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [confetti, setConfetti] = useState<Array<{ id: number; left: number; top: number; tx: number }>>([]);
 
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const fundButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -68,60 +75,133 @@ export default function Home() {
     };
   }, [showTimestampModal]);
 
+  // Master initialization effect - coordinates all RPC loading with priority
   useEffect(() => {
-    // Check for GUID in URL params
-    const params = new URLSearchParams(window.location.search);
-    const guid = params.get("guid");
-    const urlError = params.get("error");
+    const initializeRpc = async () => {
+      console.log("🔧 Starting RPC initialization...");
 
-    if (guid) {
-      try {
-        const rpcUrl = RPC_CONFIG.buildUrl(guid);
-        console.log("Constructed RPC URL:", rpcUrl);
-        setRpcUrl(rpcUrl);
-        setShowRpcInput(false);
-        setValidRpc(true);
-        // Save to localStorage when loading from URL
-        localStorage.setItem("tenderly-faucet-url", rpcUrl);
-        // Clear the URL params
+      // Check for GUID in URL params (highest priority)
+      const params = new URLSearchParams(window.location.search);
+      const guid = params.get("guid");
+      const urlError = params.get("error");
+
+      // Handle URL error parameter
+      if (urlError) {
+        setError(urlError);
         window.history.replaceState({}, "", "/");
-      } catch {
-        setError("Invalid GUID format");
-        window.history.replaceState({}, "", "/");
+        setValidationComplete(true);
+        return;
       }
-    } else {
-      console.warn("No GUID found in URL");
-    }
 
-    if (urlError) {
-      setError(urlError);
-      window.history.replaceState({}, "", "/");
-    }
-  }, []);
-
-  useEffect(() => {
-    const validateStoredRpc = async () => {
-      const storedUrl = localStorage.getItem("tenderly-faucet-url");
-      if (storedUrl) {
+      // Priority 1: GUID from URL querystring
+      if (guid) {
+        console.log("📍 Priority 1: Validating GUID from URL:", guid);
         try {
-          const result = await validateProvider(storedUrl);
+          // Validate the GUID (with auto-retry on region mismatch)
+          const result = await validateProvider(guid);
+
           if (result.isValid) {
-            setRpcUrl(storedUrl);
+            // Use corrected URL if provided, otherwise build from GUID
+            const validatedUrl =
+              result.correctedUrl || RPC_CONFIG.buildUrl(guid);
+
+            console.log("✅ GUID validation successful! URL:", validatedUrl);
+            setRpcUrl(validatedUrl);
             setValidRpc(true);
             setShowRpcInput(false);
+
+            // Save to cache
+            saveRpcCache(validatedUrl);
+
+            if (result.correctedUrl) {
+              console.log(
+                "🔄 Auto-corrected URL with region:",
+                result.correctedUrl
+              );
+            }
           } else {
-            localStorage.removeItem("tenderly-faucet-url");
+            console.error("❌ GUID validation failed:", result.error);
+            setError(result.error || "Invalid GUID or unreachable RPC URL");
+            setShowRpcInput(true);
           }
-        } catch (error) {
-          console.error("Error validating stored RPC:", error);
-          localStorage.removeItem("tenderly-faucet-url");
+
+          // Clear the URL params
+          window.history.replaceState({}, "", "/");
+        } catch (err) {
+          console.error("Error validating GUID from URL:", err);
+          setError("Failed to validate GUID");
+          setShowRpcInput(true);
+          window.history.replaceState({}, "", "/");
         }
+
+        setValidationComplete(true);
+        return;
       }
+
+      // Priority 2: Load from cache (if no URL param)
+      console.log("📍 Priority 2: Checking cache for stored RPC...");
+      const cachedRpc = loadRpcCache();
+
+      if (cachedRpc) {
+        console.log("📂 Found cached RPC, validating...");
+
+        // Show cached URL optimistically
+        setRpcUrl(cachedRpc.url);
+        setShowRpcInput(false);
+
+        // Validate cached URL
+        try {
+          const result = await validateProvider(cachedRpc.url);
+
+          if (result.isValid) {
+            console.log("✅ Cached RPC validation successful!");
+
+            // Use corrected URL if provided
+            const validatedUrl = result.correctedUrl || cachedRpc.url;
+
+            setRpcUrl(validatedUrl);
+            setValidRpc(true);
+
+            // Update cache if URL was corrected
+            if (result.correctedUrl) {
+              console.log(
+                "🔄 Updated cache with corrected URL:",
+                result.correctedUrl
+              );
+              saveRpcCache(validatedUrl);
+            }
+          } else {
+            console.error("❌ Cached RPC validation failed:", result.error);
+            setError(
+              `Stored RPC URL is no longer valid: ${result.error || "Unknown error"}`
+            );
+            clearRpcCache();
+            setShowRpcInput(true);
+            setRpcUrl("");
+            setValidRpc(false);
+          }
+        } catch (err) {
+          console.error("Error validating cached RPC:", err);
+          setError("Failed to validate stored RPC URL");
+          clearRpcCache();
+          setShowRpcInput(true);
+          setRpcUrl("");
+          setValidRpc(false);
+        }
+
+        setValidationComplete(true);
+        return;
+      }
+
+      // Priority 3: No cached RPC - show input modal
+      console.log("📍 Priority 3: No cached RPC found, showing input modal");
+      setShowRpcInput(true);
       setValidationComplete(true);
     };
 
-    validateStoredRpc();
+    initializeRpc();
   }, []);
+
 
   const handleRpcSubmit = async () => {
     if (!inputRpcUrl) return;
@@ -165,8 +245,8 @@ export default function Home() {
         setShowRpcInput(false);
         setValidationError(null);
 
-        // Store the validated URL in localStorage
-        localStorage.setItem("tenderly-faucet-url", validatedUrl);
+        // Store the validated URL in cache
+        saveRpcCache(validatedUrl);
 
         if (result.correctedUrl) {
           console.log(
@@ -292,16 +372,19 @@ export default function Home() {
     e.preventDefault();
     if (!isValidAddress) {
       setError("Invalid address");
+      setTimeout(() => setError(null), 2000);
       return;
     }
 
     if (!useCustomToken && !selectedToken) {
       setError("No token selected");
+      setTimeout(() => setError(null), 2000);
       return;
     }
 
     if (useCustomToken && !isValidToken) {
       setError("Invalid custom token");
+      setTimeout(() => setError(null), 2000);
       return;
     }
 
@@ -329,6 +412,8 @@ export default function Home() {
         if (!provider) {
           console.error("Provider is not initialized");
           setError("Provider is not initialized");
+          setLoading(false);
+          setTimeout(() => setError(null), 2000);
           return;
         }
         await setTokenBalance(
@@ -340,22 +425,70 @@ export default function Home() {
         );
       }
 
-      setSuccess("Balance updated successfully!");
+      setSuccess("Success");
+
+      // Trigger confetti
+      createConfetti();
 
       // Refresh balances
       if (!provider) {
         console.error("Provider is not initialized");
         setError("Provider is not initialized");
+        setLoading(false);
+        setTimeout(() => setError(null), 2000);
         return;
       }
       const newBalances = await getAllBalances(provider, recipient);
       setBalances(newBalances);
+
+      // Clear success message after 2 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 2000);
     } catch (error) {
       console.error("Error during balance update:", error);
       setError(error instanceof Error ? error.message : "An error occurred");
+
+      // Clear error message after 2 seconds
+      setTimeout(() => {
+        setError(null);
+      }, 2000);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Create confetti burst from button
+  const createConfetti = () => {
+    if (!fundButtonRef.current) return;
+
+    const button = fundButtonRef.current;
+    const rect = button.getBoundingClientRect();
+    const buttonCenterX = rect.left + rect.width / 2;
+    const buttonCenterY = rect.top + rect.height / 2;
+
+    const newConfetti = [];
+    const confettiCount = 30;
+
+    for (let i = 0; i < confettiCount; i++) {
+      const angle = (Math.PI * 2 * i) / confettiCount;
+      const spread = 150 + Math.random() * 100;
+      const tx = Math.cos(angle) * spread;
+
+      newConfetti.push({
+        id: Date.now() + i,
+        left: buttonCenterX,
+        top: buttonCenterY,
+        tx: tx,
+      });
+    }
+
+    setConfetti(newConfetti);
+
+    // Clear confetti after animation
+    setTimeout(() => {
+      setConfetti([]);
+    }, 1500);
   };
 
   // Update the Change RPC button click handler
@@ -409,14 +542,9 @@ export default function Home() {
           console.log("Initializing provider with RPC URL:", rpcUrl);
           const newProvider = new ethers.JsonRpcProvider(rpcUrl);
           setProvider(newProvider);
-          Cookies.set(STORAGE_KEYS.TENDERLY_URL, rpcUrl);
         } catch (error) {
           console.error("Failed to initialize provider:", error);
           setError("Failed to initialize provider");
-          Cookies.set(
-            STORAGE_KEYS.ERROR,
-            error instanceof Error ? error.message : JSON.stringify(error)
-          );
         }
       } else {
         console.warn("Provider not initialized: validRpc or rpcUrl is false");
@@ -426,22 +554,13 @@ export default function Home() {
     initializeProvider();
   }, [validRpc, rpcUrl]);
 
-  // Load the RPC URL from cookies on initial load
-  useEffect(() => {
-    const storedUrl = Cookies.get(STORAGE_KEYS.TENDERLY_URL);
-    if (storedUrl) {
-      console.log("Loaded RPC URL from cookies:", storedUrl);
-      setRpcUrl(storedUrl);
-      setValidRpc(true);
-    } else {
-      console.warn("No RPC URL found in cookies");
-    }
-  }, []);
 
   useEffect(() => {
     const fetchBlockchainTime = async () => {
       if (!provider || !validRpc) {
-        console.log("Skipping blockchain time fetch: provider or validRpc not ready");
+        console.log(
+          "Skipping blockchain time fetch: provider or validRpc not ready"
+        );
         return;
       }
 
@@ -460,7 +579,10 @@ export default function Home() {
       } catch (error) {
         // Don't set global error for blockchain time fetch failures
         // This might fail if using non-admin RPC URL
-        console.warn("Could not fetch blockchain time (may require admin RPC):", error);
+        console.warn(
+          "Could not fetch blockchain time (may require admin RPC):",
+          error
+        );
       }
     };
 
@@ -515,27 +637,31 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden">
-      {success && (
-        <div className="fixed top-1/2 -translate-y-1/2 animate-fly-across">
-          <div className="text-4xl relative">
-            <span className="absolute -top-4 left-4 transform -rotate-12">
-              🦛
-            </span>
-            <span className="transform -rotate-45">🚀</span>
-          </div>
-        </div>
-      )}
+      {/* Confetti particles */}
+      {confetti.map((piece, index) => (
+        <div
+          key={piece.id}
+          className={`confetti confetti-${(index % 10) + 1}`}
+          style={{
+            left: `${piece.left}px`,
+            top: `${piece.top}px`,
+            '--tx': `${piece.tx}px`,
+          } as React.CSSProperties}
+        />
+      ))}
 
       {/* RPC Modal */}
       {showRpcInput && (
-        <div className="fixed inset-0 bg-white flex items-start sm:items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white flex items-start justify-center z-50 p-4 pt-12 sm:pt-20">
           <div className="w-full max-w-md">
             <h2 className="text-lg sm:text-xl mb-3 font-mono text-black">
               Input Tenderly Admin RPC URL or GUID
             </h2>
             {validRpc && rpcUrl && (
               <div className="text-xs text-gray-600 mb-3 flex items-center gap-2">
-                <span>Currently connected to: {getGuidFromUrl(rpcUrl) || "Unknown"}</span>
+                <span>
+                  Currently connected to: {getGuidFromUrl(rpcUrl) || "Unknown"}
+                </span>
                 <button
                   onClick={(e) => {
                     e.preventDefault();
@@ -546,11 +672,25 @@ export default function Home() {
                   title="Copy full URL"
                 >
                   {copiedUrl ? (
-                    <span className="text-green-600 text-xs font-semibold">✓</span>
+                    <span className="text-green-600 text-xs font-semibold">
+                      ✓
+                    </span>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className="w-3 h-3"
+                    >
                       <rect x="5" y="2" width="7" height="9" rx="1" />
-                      <path d="M3 5h1v9a1 1 0 0 0 1 1h5v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                      <path
+                        d="M3 5h1v9a1 1 0 0 0 1 1h5v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
                     </svg>
                   )}
                 </button>
@@ -575,22 +715,33 @@ export default function Home() {
                 }}
                 placeholder="Enter full RPC URL or just the GUID (e.g. 4249ff26-95dc-488b-8f35-a6ca53ecebb3)"
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
-                  validationError
-                    ? "border-red-500"
-                    : "border-black"
+                  validationError ? "border-red-500" : "border-black"
                 }`}
                 autoFocus
                 required
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                {isValidating && (
-                  <span className="text-gray-400">...</span>
-                )}
+                {isValidating && <span className="text-gray-400">...</span>}
               </div>
             </div>
             {validationError && (
-              <div className="text-red-500 text-xs mt-1">
-                {validationError}
+              <div className="text-red-500 text-xs mt-1">{validationError}</div>
+            )}
+            {validRpc && !inputRpcUrl && (
+              <div className="mt-3 mb-2">
+                <button
+                  onClick={() => {
+                    clearRpcCache();
+                    setRpcUrl("");
+                    setValidRpc(false);
+                    setInputRpcUrl("");
+                    setValidationError(null);
+                    setError(null);
+                  }}
+                  className="text-xs text-gray-500 hover:text-red-600 underline"
+                >
+                  Clear RPC & Reconnect
+                </button>
               </div>
             )}
             <div className="flex gap-2 mt-3">
@@ -632,12 +783,15 @@ export default function Home() {
             className="w-full p-3 mb-4 border-2 border-purple-400 bg-purple-50/30 hover:bg-purple-50/50 text-xs transition-all shadow-sm hover:shadow-md rounded-lg cursor-pointer"
             onClick={handleChangeRpc}
             style={{
-              boxShadow: "0 0 0 1px rgba(168, 85, 247, 0.1), 0 2px 4px rgba(168, 85, 247, 0.1)",
+              boxShadow:
+                "0 0 0 1px rgba(168, 85, 247, 0.1), 0 2px 4px rgba(168, 85, 247, 0.1)",
             }}
           >
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
-                <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">rpc</div>
+                <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">
+                  tenderly rpc
+                </div>
                 <div className="font-mono break-all text-gray-700 flex items-center gap-2">
                   <span>{getGuidFromUrl(rpcUrl) || "N/A"}</span>
                   <button
@@ -649,19 +803,37 @@ export default function Home() {
                     title="Copy full URL"
                   >
                     {copiedUrl ? (
-                      <span className="text-green-600 text-xs font-semibold">✓</span>
+                      <span className="text-green-600 text-xs font-semibold">
+                        ✓
+                      </span>
                     ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        className="w-3 h-3"
+                      >
                         <rect x="5" y="2" width="7" height="9" rx="1" />
-                        <path d="M3 5h1v9a1 1 0 0 0 1 1h5v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        <path
+                          d="M3 5h1v9a1 1 0 0 0 1 1h5v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
                       </svg>
                     )}
                   </button>
                 </div>
               </div>
               <div className="flex-shrink-0 text-right">
-                <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">region</div>
-                <div className="font-mono text-gray-700">{getRegionFromUrl(rpcUrl)}</div>
+                <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">
+                  region
+                </div>
+                <div className="font-mono text-gray-700">
+                  {getRegionFromUrl(rpcUrl)}
+                </div>
               </div>
             </div>
           </div>
@@ -673,7 +845,9 @@ export default function Home() {
         )}
 
         <div className="mb-6">
-          <h1 className="text-lg sm:text-xl text-center">🚰 Tenderly Token Faucet</h1>
+          <h1 className="text-lg sm:text-xl text-center">
+            🚰 Tenderly Token Faucet
+          </h1>
         </div>
 
         {validRpc && !showRpcInput && (
@@ -769,20 +943,25 @@ export default function Home() {
             </div>
 
             <button
+              ref={fundButtonRef}
               type="submit"
               disabled={
                 loading || !isValidAddress || (useCustomToken && !isValidToken)
               }
-              className={`w-full p-2 text-sm sm:text-base border border-black text-black
+              className={`w-full p-2 text-sm sm:text-base border transition-colors
                 ${
-                  loading ||
-                  !isValidAddress ||
-                  (useCustomToken && !isValidToken)
-                    ? "bg-gray-100 border-gray-400 text-gray-500 cursor-not-allowed"
-                    : "bg-white hover:bg-gray-50"
+                  success
+                    ? "border-green-500 bg-green-50 text-green-700"
+                    : error
+                    ? "border-red-500 bg-red-50 text-red-700"
+                    : loading ||
+                      !isValidAddress ||
+                      (useCustomToken && !isValidToken)
+                    ? "border-gray-400 bg-gray-100 text-gray-500 cursor-not-allowed"
+                    : "border-black bg-white text-black hover:bg-gray-50"
                 }`}
             >
-              {loading ? "..." : "Fund"}
+              {success ? success : error ? error : loading ? "..." : "Fund"}
             </button>
 
             <a
@@ -806,13 +985,6 @@ export default function Home() {
                   })
                 : "Loading..."}
             </a>
-
-            {error && (
-              <div className="text-red-500 text-xs sm:text-sm">{error}</div>
-            )}
-            {success && (
-              <div className="text-green-500 text-xs sm:text-sm">{success}</div>
-            )}
           </form>
         )}
 
@@ -841,44 +1013,54 @@ export default function Home() {
       </main>
 
       {showTimestampModal && (
-        <div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 flex items-start justify-center z-50 p-4 pt-12 sm:pt-20"
+          style={{ backgroundColor: "rgba(255, 255, 255, 0.85)" }}
+        >
           <div
             ref={modalRef}
-            className="bg-white p-4 rounded shadow-lg max-w-sm w-full relative"
+            className="bg-white p-6 rounded-lg max-w-sm w-full relative border border-gray-200"
+            style={{
+              boxShadow:
+                "0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.1)",
+            }}
           >
             <button
               onClick={() => setShowTimestampModal(false)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl leading-none"
             >
               &times;
             </button>
-            <h3 className="text-lg font-bold mb-2 text-black">
+            <h3 className="text-lg font-bold mb-4 text-black font-mono">
               Set EVM Timestamp
             </h3>
-            <div className="mb-2">
-              <label className="block text-sm mb-1 text-black">
+            <div className="mb-3">
+              <label className="block text-xs text-gray-500 mb-1 font-mono">
                 Advance by:
               </label>
               <input
                 type="number"
                 value={advanceAmount}
                 onChange={(e) => setAdvanceAmount(Number(e.target.value))}
-                className="w-full p-2 border border-gray-300 rounded text-black"
+                className="w-full p-2 border border-black bg-white text-black font-mono"
               />
             </div>
-            <div className="mb-2">
+            <div className="mb-4">
               <select
                 value={timeUnit}
                 onChange={(e) => setTimeUnit(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded text-black"
+                className="w-full p-2 border border-black bg-white text-black font-mono"
               >
                 <option value="seconds">Seconds</option>
                 <option value="days">Days</option>
                 <option value="weeks">Weeks</option>
               </select>
             </div>
-            <div className="mb-2">
-              <p className="text-black">
+            <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
+              <p className="text-xs text-gray-500 mb-1 font-mono">
+                Current timestamp:
+              </p>
+              <p className="text-sm text-black font-mono">
                 {currentTimestamp !== null
                   ? new Date(currentTimestamp * 1000).toLocaleString() +
                     " | " +
@@ -888,7 +1070,7 @@ export default function Home() {
             </div>
             <button
               onClick={advanceTimestamp}
-              className="w-full p-2 bg-gray-200 text-black rounded hover:bg-gray-300"
+              className="w-full p-2 bg-white border border-black text-black hover:bg-gray-50 font-mono"
             >
               Advance chain timestamp
             </button>

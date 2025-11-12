@@ -93,48 +93,56 @@ export async function validateProvider(
       /testnet region '([^']+)' and url region/
     );
 
-    if (regionMismatchMatch && RPC_CONFIG.isGuid(rpcUrl.trim())) {
+    if (regionMismatchMatch) {
       const correctRegion = regionMismatchMatch[1];
-      console.log(
-        `🔄 Region mismatch detected. Retrying with region: ${correctRegion}`
-      );
 
-      // Rebuild URL with correct region
-      const correctedUrl = RPC_CONFIG.buildUrl(rpcUrl.trim(), correctRegion);
-      console.log("Retrying with corrected URL:", correctedUrl);
+      // Extract GUID from input (whether it's a GUID or full URL)
+      const guid = RPC_CONFIG.isGuid(rpcUrl.trim())
+        ? rpcUrl.trim()
+        : RPC_CONFIG.extractGuid(rpcUrl.trim());
 
-      try {
-        const retryProvider = new ethers.JsonRpcProvider(correctedUrl);
-        const timeout = new Promise((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  `Connection timeout after ${TIMEOUTS.RPC_VALIDATION / 1000} seconds`
-                )
-              ),
-            TIMEOUTS.RPC_VALIDATION
-          )
-        );
-        const network = await Promise.race([
-          retryProvider.getNetwork(),
-          timeout,
-        ]);
-
+      if (guid) {
         console.log(
-          "✅ RPC validation successful with corrected region! Network:",
-          network
+          `🔄 Region mismatch detected. Retrying with region: ${correctRegion}`
         );
-        return { isValid: true, correctedUrl };
-      } catch (retryErr) {
-        console.error("Retry with corrected region failed:", retryErr);
-        return {
-          isValid: false,
-          error:
-            retryErr instanceof Error
-              ? retryErr.message
-              : "Failed to connect with corrected region",
-        };
+
+        // Rebuild URL with correct region
+        const correctedUrl = RPC_CONFIG.buildUrl(guid, correctRegion);
+        console.log("Retrying with corrected URL:", correctedUrl);
+
+        try {
+          const retryProvider = new ethers.JsonRpcProvider(correctedUrl);
+          const timeout = new Promise((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `Connection timeout after ${TIMEOUTS.RPC_VALIDATION / 1000} seconds`
+                  )
+                ),
+              TIMEOUTS.RPC_VALIDATION
+            )
+          );
+          const network = await Promise.race([
+            retryProvider.getNetwork(),
+            timeout,
+          ]);
+
+          console.log(
+            "✅ RPC validation successful with corrected region! Network:",
+            network
+          );
+          return { isValid: true, correctedUrl };
+        } catch (retryErr) {
+          console.error("Retry with corrected region failed:", retryErr);
+          return {
+            isValid: false,
+            error:
+              retryErr instanceof Error
+                ? retryErr.message
+                : "Failed to connect with corrected region",
+          };
+        }
       }
     }
 

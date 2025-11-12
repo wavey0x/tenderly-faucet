@@ -29,38 +29,33 @@ body {
 @tailwind components;
 @tailwind utilities;
 
-@keyframes flyAcross {
+@keyframes confetti-fly {
   0% {
-    left: -100px;
-    opacity: 0;
-    transform: translateY(0px);
-  }
-  10% {
+    transform: translateY(0) translateX(0) rotate(0deg);
     opacity: 1;
-    transform: translateY(-5px);
-  }
-  20% {
-    transform: translateY(0px);
-  }
-  30% {
-    transform: translateY(-5px);
-  }
-  40% {
-    transform: translateY(0px);
-  }
-  90% {
-    opacity: 1;
-    transform: translateY(-5px);
   }
   100% {
-    left: calc(100vw + 100px);
+    transform: translateY(-100vh) translateX(var(--tx)) rotate(720deg);
     opacity: 0;
-    transform: translateY(0px);
   }
 }
 
-.animate-fly-across {
-  animation: flyAcross 4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+.confetti {
   position: fixed;
-  left: -100px;
+  width: 10px;
+  height: 10px;
+  z-index: 1000;
+  pointer-events: none;
+  animation: confetti-fly 1.5s ease-out forwards;
 }
+
+.confetti-1 { animation-delay: 0s; background: #ff6b6b; }
+.confetti-2 { animation-delay: 0.1s; background: #4ecdc4; }
+.confetti-3 { animation-delay: 0.2s; background: #45b7d1; }
+.confetti-4 { animation-delay: 0s; background: #f9ca24; }
+.confetti-5 { animation-delay: 0.1s; background: #f0932b; }
+.confetti-6 { animation-delay: 0.2s; background: #eb4d4b; }
+.confetti-7 { animation-delay: 0s; background: #6ab04c; }
+.confetti-8 { animation-delay: 0.1s; background: #a29bfe; }
+.confetti-9 { animation-delay: 0.2s; background: #fd79a8; }
+.confetti-10 { animation-delay: 0s; background: #ffeaa7; }
