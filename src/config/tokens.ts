@@ -20,4 +20,10 @@ export const PRESET_TOKENS: Token[] = [
     name: "Yearn YB Token",
     decimals: 18,
   },
+  {
+    address: "0xBF319dDC2Edc1Eb6FDf9910E39b37Be221C8805F",
+    symbol: "yvcrvUSD-2",
+    name: "yvcrvUSD-2",
+    decimals: 18,
+  },
 ];

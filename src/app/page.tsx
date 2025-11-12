@@ -43,6 +43,7 @@ export default function Home() {
   const [advanceAmount, setAdvanceAmount] = useState(0);
   const [timeUnit, setTimeUnit] = useState("seconds");
   const [currentTimestamp, setCurrentTimestamp] = useState<number | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const modalRef = useRef<HTMLDivElement | null>(null);
 
@@ -388,6 +389,19 @@ export default function Home() {
     }
   };
 
+  // Copy full RPC URL to clipboard
+  const handleCopyUrl = async () => {
+    if (rpcUrl) {
+      try {
+        await navigator.clipboard.writeText(rpcUrl);
+        setCopiedUrl(true);
+        setTimeout(() => setCopiedUrl(false), 2000);
+      } catch (err) {
+        console.error("Failed to copy URL:", err);
+      }
+    }
+  };
+
   useEffect(() => {
     const initializeProvider = async () => {
       if (validRpc && rpcUrl) {
@@ -520,8 +534,26 @@ export default function Home() {
               Input Tenderly Admin RPC URL or GUID
             </h2>
             {validRpc && rpcUrl && (
-              <div className="text-xs text-gray-600 mb-3">
-                Currently connected to: {getGuidFromUrl(rpcUrl) || "Unknown"}
+              <div className="text-xs text-gray-600 mb-3 flex items-center gap-2">
+                <span>Currently connected to: {getGuidFromUrl(rpcUrl) || "Unknown"}</span>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCopyUrl();
+                  }}
+                  className="inline-flex items-center justify-center w-4 h-4 text-gray-400 hover:text-purple-600 transition-colors"
+                  title="Copy full URL"
+                >
+                  {copiedUrl ? (
+                    <span className="text-green-600 text-xs font-semibold">✓</span>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+                      <rect x="5" y="2" width="7" height="9" rx="1" />
+                      <path d="M3 5h1v9a1 1 0 0 0 1 1h5v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                  )}
+                </button>
               </div>
             )}
             <div className="relative">
@@ -597,8 +629,8 @@ export default function Home() {
       <main className="p-3 sm:p-4 max-w-md mx-auto font-mono text-black">
         {!showRpcInput && validRpc && (
           <div
+            className="w-full p-3 mb-4 border-2 border-purple-400 bg-purple-50/30 hover:bg-purple-50/50 text-xs transition-all shadow-sm hover:shadow-md rounded-lg cursor-pointer"
             onClick={handleChangeRpc}
-            className="w-full p-3 mb-4 border-2 border-purple-400 bg-purple-50/30 hover:bg-purple-50/50 cursor-pointer text-xs transition-all shadow-sm hover:shadow-md rounded-lg"
             style={{
               boxShadow: "0 0 0 1px rgba(168, 85, 247, 0.1), 0 2px 4px rgba(168, 85, 247, 0.1)",
             }}
@@ -606,7 +638,26 @@ export default function Home() {
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">rpc</div>
-                <div className="font-mono break-all text-gray-700">{getGuidFromUrl(rpcUrl) || "N/A"}</div>
+                <div className="font-mono break-all text-gray-700 flex items-center gap-2">
+                  <span>{getGuidFromUrl(rpcUrl) || "N/A"}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyUrl();
+                    }}
+                    className="inline-flex items-center justify-center w-4 h-4 text-gray-400 hover:text-purple-600 transition-colors flex-shrink-0"
+                    title="Copy full URL"
+                  >
+                    {copiedUrl ? (
+                      <span className="text-green-600 text-xs font-semibold">✓</span>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+                        <rect x="5" y="2" width="7" height="9" rx="1" />
+                        <path d="M3 5h1v9a1 1 0 0 0 1 1h5v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
               <div className="flex-shrink-0 text-right">
                 <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">region</div>
