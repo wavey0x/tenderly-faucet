@@ -401,7 +401,7 @@ export async function getAllBalances(
           balance.toString(),
           decimals
         );
-      } catch (err) {
+      } catch {
         // Token might not be deployed on this network or doesn't implement ERC20 properly
         console.warn(
           `⚠️ Token ${token.symbol} (${token.address}) not available on this network - setting balance to 0`
