@@ -1,58 +1,151 @@
 import { ethers } from "ethers";
-import { PRESET_TOKENS, Token } from "@/config/tokens";
+import { PRESET_TOKENS } from "@/config/tokens";
 import { RPC_CONFIG } from "@/config/rpc";
+import { MULTICALL_ADDRESS, TIMEOUTS } from "@/config/constants";
+import type {
+  Token,
+  RpcValidationResult,
+  AddressBalances,
+  BalanceInfo,
+} from "@/types";
 
-export async function validateProvider(rpcUrl: string): Promise<boolean> {
+export async function validateProvider(
+  rpcUrl: string
+): Promise<RpcValidationResult> {
   try {
-    // Clean the URL and ensure it's properly formatted
-    const cleanUrl = rpcUrl.replace(/\s+/g, "");
+    const cleanInput = rpcUrl.trim();
 
     // Debug log
-    console.log("Validating RPC URL:", {
+    console.log("Validating RPC input:", {
       originalUrl: rpcUrl,
-      cleanUrl,
-      hasSpaces: rpcUrl.includes(" "),
-      startsWithHttp: cleanUrl.startsWith("http"),
+      cleanInput,
+      isGuid: RPC_CONFIG.isGuid(cleanInput),
+      isTenderlyUrl: RPC_CONFIG.isTenderlyUrl(cleanInput),
+      startsWithHttp: cleanInput.startsWith("http"),
     });
 
-    // Check if it's a GUID
-    if (
-      cleanUrl.match(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    let urlToValidate: string;
+    const isGuidInput = RPC_CONFIG.isGuid(cleanInput);
+
+    // Case 1: Input is just a GUID - build full URL
+    if (isGuidInput) {
+      urlToValidate = RPC_CONFIG.buildUrl(cleanInput);
+      console.log("Detected GUID, built URL:", urlToValidate);
+    }
+    // Case 2: Input is a full Tenderly URL - use as-is
+    else if (RPC_CONFIG.isTenderlyUrl(cleanInput)) {
+      urlToValidate = cleanInput;
+      const extractedGuid = RPC_CONFIG.extractGuid(cleanInput);
+      console.log(
+        "Detected Tenderly URL, using as-is. Extracted GUID:",
+        extractedGuid
+      );
+    }
+    // Case 3: Input is some other URL format
+    else if (cleanInput.startsWith("http")) {
+      urlToValidate = cleanInput;
+      console.log("Detected generic HTTP URL");
+    }
+    // Case 4: Invalid input
+    else {
+      throw new Error(
+        "Invalid URL format - must be a GUID or valid HTTP(S) URL"
+      );
+    }
+
+    // Validate the URL format
+    new URL(urlToValidate);
+
+    // Test connectivity by attempting to get network info with timeout
+    console.log("Testing connectivity to:", urlToValidate);
+    const tempProvider = new ethers.JsonRpcProvider(urlToValidate);
+
+    // Add timeout to prevent hanging
+    const timeout = new Promise((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `Connection timeout after ${TIMEOUTS.RPC_VALIDATION / 1000} seconds`
+            )
+          ),
+        TIMEOUTS.RPC_VALIDATION
       )
-    ) {
-      const fullUrl = RPC_CONFIG.buildUrl(cleanUrl);
-      const tempProvider = new ethers.JsonRpcProvider(fullUrl);
-      await tempProvider.getNetwork();
-      return true;
-    }
-
-    // Handle full URL case
-    if (!cleanUrl.startsWith("http")) {
-      throw new Error("Invalid URL format");
-    }
-
-    // Try to construct a URL object to validate format
-    new URL(cleanUrl);
-
-    const tempProvider = new ethers.JsonRpcProvider(cleanUrl);
-    // Try to get chain ID - this will fail if the RPC is invalid
-    await tempProvider.getNetwork();
-    return true;
-  } catch (err) {
-    console.error(
-      "Failed to validate RPC URL:",
-      err instanceof Error ? err.message : JSON.stringify(err)
     );
-    return false;
+
+    const networkPromise = tempProvider.getNetwork();
+
+    const network = await Promise.race([networkPromise, timeout]);
+
+    console.log("RPC validation successful! Network:", network);
+    return { isValid: true };
+  } catch (err) {
+    const errorMessage =
+      err instanceof Error ? err.message : JSON.stringify(err);
+    console.error("Failed to validate RPC URL:", errorMessage);
+    if (err instanceof Error) {
+      console.error("Error stack:", err.stack);
+    }
+
+    // Check for region mismatch error and extract region
+    // Error format: "testnet region 'us-east' and url region 'eu' do not match"
+    const regionMismatchMatch = errorMessage.match(
+      /testnet region '([^']+)' and url region/
+    );
+
+    if (regionMismatchMatch && RPC_CONFIG.isGuid(rpcUrl.trim())) {
+      const correctRegion = regionMismatchMatch[1];
+      console.log(
+        `🔄 Region mismatch detected. Retrying with region: ${correctRegion}`
+      );
+
+      // Rebuild URL with correct region
+      const correctedUrl = RPC_CONFIG.buildUrl(rpcUrl.trim(), correctRegion);
+      console.log("Retrying with corrected URL:", correctedUrl);
+
+      try {
+        const retryProvider = new ethers.JsonRpcProvider(correctedUrl);
+        const timeout = new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `Connection timeout after ${TIMEOUTS.RPC_VALIDATION / 1000} seconds`
+                )
+              ),
+            TIMEOUTS.RPC_VALIDATION
+          )
+        );
+        const network = await Promise.race([
+          retryProvider.getNetwork(),
+          timeout,
+        ]);
+
+        console.log(
+          "✅ RPC validation successful with corrected region! Network:",
+          network
+        );
+        return { isValid: true, correctedUrl };
+      } catch (retryErr) {
+        console.error("Retry with corrected region failed:", retryErr);
+        return {
+          isValid: false,
+          error:
+            retryErr instanceof Error
+              ? retryErr.message
+              : "Failed to connect with corrected region",
+        };
+      }
+    }
+
+    return { isValid: false, error: errorMessage };
   }
 }
 
-// Add this after the provider initialization
+// Multicall ABI
 const multicallAbi = [
   "function aggregate(tuple(address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)",
 ];
-const MULTICALL_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11"; // Multicall3 contract
 
 export function isValidEthereumAddress(address: string): boolean {
   try {
@@ -81,7 +174,7 @@ export async function isValidERC20(
 
     // Try to call basic ERC20 functions with a timeout
     const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout")), 5000)
+      setTimeout(() => reject(new Error("Timeout")), TIMEOUTS.TOKEN_VALIDATION)
     );
 
     await Promise.race([
@@ -120,7 +213,7 @@ export async function getAddressBalances(
   provider: ethers.JsonRpcProvider,
   address: string,
   tokenAddress?: string
-) {
+): Promise<AddressBalances> {
   const ethBalance = await provider.getBalance(address);
 
   if (!tokenAddress) {
@@ -141,7 +234,7 @@ export async function getAddressBalances(
 
     // Add timeout to prevent hanging
     const timeout = new Promise<[string, number, string]>((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout")), 5000)
+      setTimeout(() => reject(new Error("Timeout")), TIMEOUTS.TOKEN_VALIDATION)
     );
 
     const [tokenBalance, decimals, symbol] = await Promise.race([
@@ -250,7 +343,7 @@ export async function setTokenBalance(
 export async function getAllBalances(
   provider: ethers.JsonRpcProvider,
   address: string
-) {
+): Promise<BalanceInfo> {
   try {
     const multicall = new ethers.Contract(
       MULTICALL_ADDRESS,
@@ -309,7 +402,10 @@ export async function getAllBalances(
           decimals
         );
       } catch (err) {
-        console.error(`Error decoding balance for ${token.symbol}:`, err);
+        // Token might not be deployed on this network or doesn't implement ERC20 properly
+        console.warn(
+          `⚠️ Token ${token.symbol} (${token.address}) not available on this network - setting balance to 0`
+        );
         balances.tokens[token.symbol] = "0";
       }
       i += 2; // Increment by 2 as we made 2 calls per token

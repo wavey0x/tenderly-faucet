@@ -11,19 +11,16 @@ import {
   validateProvider,
 } from "@/utils/faucet";
 import { RPC_CONFIG } from "@/config/rpc";
+import { STORAGE_KEYS } from "@/config/constants";
 import { ethers } from "ethers";
 import Cookies from "js-cookie";
 
-const STORAGE_KEYS = {
-  SAVED_ADDRESSES: "tenderly-faucet-addresses",
-  TENDERLY_URL: "tenderly-faucet-url",
-  ERROR: "tenderly-faucet-error",
-};
-
 export default function Home() {
   const [showRpcInput, setShowRpcInput] = useState(true);
-  const [rpcUrl, setRpcUrl] = useState("");
+  const [rpcUrl, setRpcUrl] = useState(""); // Currently connected RPC URL
+  const [inputRpcUrl, setInputRpcUrl] = useState(""); // What user is typing in modal
   const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null); // Specific validation error
   const [isValidating, setIsValidating] = useState(false);
   const [validationComplete, setValidationComplete] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<string[]>([]);
@@ -106,8 +103,8 @@ export default function Home() {
       const storedUrl = localStorage.getItem("tenderly-faucet-url");
       if (storedUrl) {
         try {
-          const isValid = await validateProvider(storedUrl);
-          if (isValid) {
+          const result = await validateProvider(storedUrl);
+          if (result.isValid) {
             setRpcUrl(storedUrl);
             setValidRpc(true);
             setShowRpcInput(false);
@@ -126,50 +123,81 @@ export default function Home() {
   }, []);
 
   const handleRpcSubmit = async () => {
-    if (!rpcUrl) return;
+    if (!inputRpcUrl) return;
 
     setIsValidating(true);
-    setError(null);
-    // Clear localStorage at the start of validation
-    localStorage.removeItem("tenderly-faucet-url");
+    setValidationError(null);
 
     try {
-      let fullUrl = rpcUrl;
-      // Check if input is a GUID (just the UUID part)
-      if (
-        rpcUrl.match(
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-        )
-      ) {
-        fullUrl = RPC_CONFIG.buildUrl(rpcUrl);
+      const cleanInput = inputRpcUrl.trim();
+      let finalUrl = cleanInput;
+
+      // Determine the final URL to use
+      // If it's a GUID, build the full URL (may be corrected by validation if region mismatch)
+      if (RPC_CONFIG.isGuid(cleanInput)) {
+        finalUrl = RPC_CONFIG.buildUrl(cleanInput);
+        console.log("Building URL from GUID:", finalUrl);
       }
-      const isValid = await validateProvider(fullUrl);
-      if (isValid) {
-        setRpcUrl(fullUrl);
+      // If it's already a Tenderly URL, use as-is (preserves region like us-east)
+      else if (RPC_CONFIG.isTenderlyUrl(cleanInput)) {
+        finalUrl = cleanInput;
+        console.log("Using Tenderly URL as-is:", finalUrl);
+      }
+      // For other URLs, use as-is
+      else {
+        finalUrl = cleanInput;
+        console.log("Using generic URL:", finalUrl);
+      }
+
+      // Validate the URL (may return corrected URL if region mismatch)
+      const result = await validateProvider(
+        RPC_CONFIG.isGuid(cleanInput) ? cleanInput : finalUrl
+      );
+
+      if (result.isValid) {
+        // Use corrected URL if provided, otherwise use the original
+        const validatedUrl = result.correctedUrl || finalUrl;
+
+        // Update the connected RPC URL
+        setRpcUrl(validatedUrl);
         setValidRpc(true);
         setShowRpcInput(false);
-        // Store the new valid URL in localStorage
-        localStorage.setItem("tenderly-faucet-url", fullUrl);
+        setValidationError(null);
+
+        // Store the validated URL in localStorage
+        localStorage.setItem("tenderly-faucet-url", validatedUrl);
+
+        if (result.correctedUrl) {
+          console.log(
+            "✅ Connected using auto-corrected URL:",
+            result.correctedUrl
+          );
+        }
+
+        // Mark validation as complete to trigger provider initialization
+        setValidationComplete(true);
       } else {
-        setError("Invalid or unreachable RPC URL");
+        setValidationError(result.error || "Invalid or unreachable RPC URL");
       }
     } catch (error) {
       console.error(
         "Error validating RPC:",
         error instanceof Error ? error.message : JSON.stringify(error)
       );
-      setError("Failed to validate RPC URL");
+      setValidationError("Failed to validate RPC URL");
     } finally {
       setIsValidating(false);
-      setValidationComplete(true);
     }
   };
 
-  // Update the input change handler to prioritize user input
+  // Update the input change handler to only update input state
   const handleRpcInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const url = e.target.value;
-    setRpcUrl(url);
-    setValidRpc(false); // Reset valid state until re-validated
+    setInputRpcUrl(url);
+    // Clear validation error when user starts typing
+    if (validationError) {
+      setValidationError(null);
+    }
   };
 
   // Load saved data from localStorage
@@ -331,8 +359,10 @@ export default function Home() {
 
   // Update the Change RPC button click handler
   const handleChangeRpc = () => {
+    setInputRpcUrl(""); // Clear input field for new entry
+    setValidationError(null); // Clear any previous validation errors
     setShowRpcInput(true);
-    // Don't clear the current RPC URL when opening the input
+    // Keep the current RPC connection active
   };
 
   // Add this function to extract GUID from RPC URL
@@ -344,6 +374,17 @@ export default function Home() {
       return match ? match[0].slice(1) : null;
     } catch {
       return null;
+    }
+  };
+
+  // Extract region from RPC URL
+  const getRegionFromUrl = (url: string) => {
+    try {
+      // Extract region from URLs like: https://virtual.mainnet.us-east.rpc.tenderly.co
+      const match = url.match(/virtual\.mainnet\.([^.]+)\.rpc\.tenderly\.co/);
+      return match ? match[1] : "default";
+    } catch {
+      return "default";
     }
   };
 
@@ -385,10 +426,8 @@ export default function Home() {
 
   useEffect(() => {
     const fetchBlockchainTime = async () => {
-      if (!provider) {
-        if (validationComplete) {
-          setError("Provider is not initialized");
-        }
+      if (!provider || !validRpc) {
+        console.log("Skipping blockchain time fetch: provider or validRpc not ready");
         return;
       }
 
@@ -402,18 +441,19 @@ export default function Home() {
           // Set the current timestamp from the block
           setCurrentTimestamp(block.timestamp);
         } else {
-          setError("Failed to fetch block data");
+          console.warn("Failed to fetch block data");
         }
       } catch (error) {
-        console.error("Error fetching blockchain time:", error);
-        setError("Failed to fetch blockchain time");
+        // Don't set global error for blockchain time fetch failures
+        // This might fail if using non-admin RPC URL
+        console.warn("Could not fetch blockchain time (may require admin RPC):", error);
       }
     };
 
-    if (validationComplete) {
+    if (validationComplete && validRpc && provider) {
       fetchBlockchainTime();
     }
-  }, [provider, validationComplete]);
+  }, [provider, validationComplete, validRpc]);
 
   const advanceTimestamp = async () => {
     let secondsToAdd = advanceAmount;
@@ -479,64 +519,110 @@ export default function Home() {
             <h2 className="text-lg sm:text-xl mb-3 font-mono text-black">
               Input Tenderly Admin RPC URL or GUID
             </h2>
-            {error && <div className="text-red-500 text-sm mb-3">{error}</div>}
+            {validRpc && rpcUrl && (
+              <div className="text-xs text-gray-600 mb-3">
+                Currently connected to: {getGuidFromUrl(rpcUrl) || "Unknown"}
+              </div>
+            )}
             <div className="relative">
               <input
                 type="text"
-                value={rpcUrl}
+                value={inputRpcUrl}
                 onChange={handleRpcInputChange}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && inputRpcUrl && !isValidating) {
+                    e.preventDefault();
+                    handleRpcSubmit();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setShowRpcInput(false);
+                    setInputRpcUrl("");
+                    setValidationError(null);
+                  }
+                }}
                 placeholder="Enter full RPC URL or just the GUID (e.g. 4249ff26-95dc-488b-8f35-a6ca53ecebb3)"
                 className={`w-full p-2 sm:p-2 text-sm sm:text-base border bg-white text-black ${
-                  rpcUrl && !isValidating && !validRpc
+                  validationError
                     ? "border-red-500"
                     : "border-black"
                 }`}
+                autoFocus
                 required
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                {isValidating ? (
+                {isValidating && (
                   <span className="text-gray-400">...</span>
-                ) : rpcUrl && validRpc ? (
-                  <span className="text-green-500">✓</span>
-                ) : null}
+                )}
               </div>
             </div>
-            {rpcUrl && !isValidating && !validRpc && (
+            {validationError && (
               <div className="text-red-500 text-xs mt-1">
-                Invalid or unreachable RPC URL
+                {validationError}
               </div>
             )}
-            {isValidating && (
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleRpcSubmit();
-                }}
-                className="mt-3 w-full p-2 border border-black text-black bg-white hover:bg-gray-50 text-sm sm:text-base"
-              >
-                Validate
-              </button>
-            )}
+            <div className="flex gap-2 mt-3">
+              {validRpc && (
+                <button
+                  onClick={() => {
+                    setShowRpcInput(false);
+                    setInputRpcUrl("");
+                    setValidationError(null);
+                  }}
+                  disabled={isValidating}
+                  className="flex-1 p-2 border border-gray-400 text-gray-700 bg-white hover:bg-gray-50 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+              )}
+              {inputRpcUrl && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleRpcSubmit();
+                  }}
+                  disabled={isValidating}
+                  className={`p-2 border border-black text-black bg-white hover:bg-gray-50 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed ${
+                    validRpc ? "flex-1" : "w-full"
+                  }`}
+                >
+                  {isValidating ? "Validating..." : "Validate & Connect"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       <main className="p-3 sm:p-4 max-w-md mx-auto font-mono text-black">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-lg sm:text-xl">🚰 Tenderly Token Faucet</h1>
-          {!showRpcInput && validRpc && (
-            <div className="relative group">
-              <button
-                onClick={handleChangeRpc}
-                className="text-xs sm:text-sm px-2 py-1 border border-black hover:bg-gray-50"
-              >
-                Change RPC
-              </button>
-              <div className="absolute right-0 top-full mt-2 px-2 py-1 bg-black text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                {getGuidFromUrl(rpcUrl)}
+        {!showRpcInput && validRpc && (
+          <div
+            onClick={handleChangeRpc}
+            className="w-full p-3 mb-4 border-2 border-purple-400 bg-purple-50/30 hover:bg-purple-50/50 cursor-pointer text-xs transition-all shadow-sm hover:shadow-md rounded-lg"
+            style={{
+              boxShadow: "0 0 0 1px rgba(168, 85, 247, 0.1), 0 2px 4px rgba(168, 85, 247, 0.1)",
+            }}
+          >
+            <div className="flex justify-between items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">rpc</div>
+                <div className="font-mono break-all text-gray-700">{getGuidFromUrl(rpcUrl) || "N/A"}</div>
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <div className="text-purple-600 font-semibold uppercase tracking-wide text-[10px]">region</div>
+                <div className="font-mono text-gray-700">{getRegionFromUrl(rpcUrl)}</div>
               </div>
             </div>
-          )}
+          </div>
+        )}
+
+        {/* Separator */}
+        {!showRpcInput && validRpc && (
+          <div className="border-b border-gray-200 mb-6"></div>
+        )}
+
+        <div className="mb-6">
+          <h1 className="text-lg sm:text-xl text-center">🚰 Tenderly Token Faucet</h1>
         </div>
 
         {validRpc && !showRpcInput && (
