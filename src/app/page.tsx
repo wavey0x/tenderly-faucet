@@ -17,7 +17,6 @@ import {
   saveRpcCache,
   loadRpcCache,
   clearRpcCache,
-  updateRpcCacheUsage,
 } from "@/utils/rpcCache";
 
 export default function Home() {
@@ -50,6 +49,9 @@ export default function Home() {
   const [currentTimestamp, setCurrentTimestamp] = useState<number | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [confetti, setConfetti] = useState<Array<{ id: number; left: number; top: number; tx: number }>>([]);
+  const [timestampSuccess, setTimestampSuccess] = useState<string | null>(null);
+  const [timestampError, setTimestampError] = useState<string | null>(null);
+  const [timestampLoading, setTimestampLoading] = useState(false);
 
   const modalRef = useRef<HTMLDivElement | null>(null);
   const fundButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -592,6 +594,10 @@ export default function Home() {
   }, [provider, validationComplete, validRpc]);
 
   const advanceTimestamp = async () => {
+    setTimestampLoading(true);
+    setTimestampSuccess(null);
+    setTimestampError(null);
+
     let secondsToAdd = advanceAmount;
     if (timeUnit === "days") {
       secondsToAdd *= 86400;
@@ -600,7 +606,9 @@ export default function Home() {
     }
 
     if (!provider) {
-      setError("Provider is not initialized");
+      setTimestampError("Provider is not initialized");
+      setTimestampLoading(false);
+      setTimeout(() => setTimestampError(null), 2000);
       return;
     }
 
@@ -617,21 +625,19 @@ export default function Home() {
       const block = await provider.getBlock("latest");
       if (block) {
         setCurrentTimestamp(block.timestamp);
-
-        // Perform the animation to indicate success
-        const timestampElement = document.getElementById("timestamp-display");
-        if (timestampElement) {
-          timestampElement.classList.add("text-green-500");
-          setTimeout(() => {
-            timestampElement.classList.remove("text-green-500");
-          }, 500);
-        }
+        setTimestampSuccess("Success");
+        setTimestampLoading(false);
+        setTimeout(() => setTimestampSuccess(null), 2000);
       } else {
-        setError("Failed to fetch block data");
+        setTimestampError("Failed to fetch block data");
+        setTimestampLoading(false);
+        setTimeout(() => setTimestampError(null), 2000);
       }
     } catch (error) {
       console.error("Error advancing timestamp:", error);
-      setError("Failed to advance timestamp");
+      setTimestampError("Failed to advance timestamp");
+      setTimestampLoading(false);
+      setTimeout(() => setTimestampError(null), 2000);
     }
   };
 
@@ -1070,11 +1076,17 @@ export default function Home() {
             </div>
             <button
               onClick={advanceTimestamp}
-              className="w-full p-2 bg-white border border-black text-black hover:bg-gray-50 font-mono"
+              disabled={timestampLoading}
+              className={`w-full p-2 text-sm sm:text-base border transition-colors font-mono
+                ${timestampSuccess ? "border-green-500 bg-green-50 text-green-700"
+                  : timestampError ? "border-red-500 bg-red-50 text-red-700"
+                  : timestampLoading
+                  ? "border-gray-400 bg-gray-100 text-gray-500 cursor-not-allowed"
+                  : "border-black bg-white text-black hover:bg-gray-50"
+                }`}
             >
-              Advance chain timestamp
+              {timestampSuccess ? timestampSuccess : timestampError ? timestampError : timestampLoading ? "..." : "Set"}
             </button>
-            {error && <div className="text-red-500 text-xs mt-2">{error}</div>}
           </div>
         </div>
       )}
