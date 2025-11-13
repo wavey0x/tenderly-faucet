@@ -7,7 +7,8 @@
       "Bash(lsof:*)",
       "Bash(kill:*)",
       "Bash(node -e:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []
