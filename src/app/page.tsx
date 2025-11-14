@@ -356,12 +356,12 @@ export default function Home() {
 
           {balancesHook.isValidAddress && !rpc.showRpcInput && (
             <div className="mt-6 p-3 bg-gray-50 border border-gray-200 rounded">
-              <h3 className="text-xs text-gray-500 mb-2 font-mono">
+              <h3 className="text-xs text-gray-700 mb-2 font-mono font-semibold">
                 Current Balance:
               </h3>
               <div className="space-y-1">
                 <div className="flex justify-between text-sm font-mono">
-                  <span>ETH:</span>
+                  <span className="text-gray-900">ETH:</span>
                   <span className="text-black">{balancesHook.balances?.ETH || "0"}</span>
                 </div>
                 {balancesHook.balances?.tokens && Object.entries(balancesHook.balances.tokens).map(
@@ -370,7 +370,7 @@ export default function Home() {
                       key={symbol}
                       className="flex justify-between text-sm font-mono"
                     >
-                      <span>{symbol}:</span>
+                      <span className="text-gray-900">{symbol}:</span>
                       <span className="text-black">{balance}</span>
                     </div>
                   )

@@ -5,6 +5,7 @@ export interface Token {
   name: string;
   decimals: number;
   isEth?: boolean;
+  showBalanceOnly?: boolean;
 }
 
 // Balance information
